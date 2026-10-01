@@ -13,7 +13,12 @@ DATE = r'(?<!\d)(\d{1,2})\s*[/ -]?\s*(ENE(?:RO)?|FEB(?:RERO)?|MAR(?:ZO)?|ABR(?:I
 
 def _normalize(text: str) -> str:
     text = unicodedata.normalize('NFD', text.upper())
-    return ''.join(c for c in text if unicodedata.category(c) != 'Mn')
+    text = ''.join(c for c in text if unicodedata.category(c) != 'Mn')
+    return re.sub(r'TOTAL\s*A(?:L)?\s*PAGAR', 'TOTAL A PAGAR', text)
+
+
+def _commercial(text: str) -> bool:
+    return 'ENEL' in text and 'CONSUMO ACTIVA SENCILLA' in text and 'SUBTOTAL VALOR CONSUMO' in text
 
 
 def _number(value: str) -> float:
@@ -61,6 +66,20 @@ def _consumptions(text: str):
         match = re.search(r'(?<![\d.,])(' + NUMBER + r')\s*KWH\b', block)
         if match:
             yield _number(match[1])
+    if _commercial(text):
+        # Commercial ENEL table: current/previous meter, difference, factor,
+        # consumed/billed active energy, unit price and charged value.
+        numeric_line = r'\s*(' + NUMBER + r')\s*\n'
+        money_line = r'\s*\$\s*(' + NUMBER + r')\s*(?:\n|$)'
+        pattern = r'CONSUMO ACTIVA SENCILLA\s*\n' + numeric_line * 6 + money_line * 2
+        for row in re.finditer(pattern, text):
+            current, previous, difference, factor, consumed, billed, rate, charged = map(_number, row.groups())
+            if (factor > 0 and billed >= 0
+                    and abs(current - previous - difference) < .01
+                    and abs(difference * factor - consumed) < .01
+                    and abs(consumed - billed) < .01
+                    and abs(billed * rate - charged) <= billed * .01 + 1):
+                yield billed
 
 
 def _periods(text: str):
@@ -76,6 +95,17 @@ def _periods(text: str):
             continue
         if start <= end:
             yield start.isoformat(), end.isoformat()
+    if _commercial(text):
+        # These invoices store the range as native text but its label is an
+        # image. Require the specific commercial table before using a range.
+        for match in re.finditer(DATE + r'\s+(?:A|AL)\s+' + DATE, text):
+            try:
+                start = date(int(match[3]), MONTHS[match[2][:3]], int(match[1]))
+                end = date(int(match[6]), MONTHS[match[5][:3]], int(match[4]))
+            except ValueError:
+                continue
+            if start <= end:
+                yield start.isoformat(), end.isoformat()
 
 
 def extract_invoice(text: str) -> dict:

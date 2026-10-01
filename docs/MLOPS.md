@@ -51,12 +51,15 @@ uv run python -m ml.monitor            # exit 2 => reentrenar desde el paso 2
 - **Reentrenamiento:** revisión bimestral + reentrenamiento ante drift
   (cambio ≥ 25 % en la media reciente de una sede), cambio de tarifas o
   champion con más de 60 días. Umbrales configurables (`--drift-threshold`).
-- **Ramas y CI:** `develop` integra, `main` es producción (PR con revisión).
-  GitHub Actions (`uv sync --frozen` + `pytest`) corre en push/PR a ambas.
+- **Git local:** `main` conserva la versión conciliada y la rama
+  `integracion/mlops` registra esta integración. No hay remoto ni GitHub Actions
+  configurados; su publicación y CI quedan pendientes.
 - **Secretos:** credenciales solo por `.env` / GitHub Secrets; `models/*.joblib`,
   `mlruns/`, `data/raw/` y `reports/` están ignorados por git.
 
 ## SLO
 
-- Ingesta: ≥ 98 % de ejecuciones sin errores fatales, < 5 s por factura.
+- Objetivo de ingesta: ≥ 98 % de ejecuciones sin errores fatales. El OCR local
+  depende del tamaño del documento y puede tardar varios minutos; no se valida
+  un objetivo de menos de cinco segundos por factura.
 - Modelo: MAPE reportado en lenguaje de negocio + MAE/RMSE/R² para auditoría.

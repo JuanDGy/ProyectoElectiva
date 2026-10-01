@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 import logging
+import re
 from pathlib import Path
 
 import numpy as np
@@ -27,8 +28,8 @@ def _get_reader():
     )
 
 
-def _ocr_page(page) -> str:
-    pixmap = page.get_pixmap(dpi=300, colorspace=pymupdf.csRGB, alpha=False)
+def _ocr_page(page, clip=None, dpi: int = 300) -> str:
+    pixmap = page.get_pixmap(dpi=dpi, clip=clip, colorspace=pymupdf.csRGB, alpha=False)
     image = np.frombuffer(pixmap.samples, dtype=np.uint8).reshape(
         pixmap.height, pixmap.width, 3,
     )
@@ -38,6 +39,29 @@ def _ocr_page(page) -> str:
         image, detail=0, paragraph=False, decoder='greedy', canvas_size=3500,
     )
     return '\n'.join(parts).strip()
+
+
+def _supplement_payment_label(page, text: str) -> str:
+    """Read ENEL commercial invoice's image label; preserve native money digits."""
+    upper = text.upper()
+    if ('ENEL' not in upper or 'CONSUMO ACTIVA SENCILLA' not in upper
+            or 'SUBTOTAL VALOR CONSUMO' not in upper
+            or re.search(r'TOTAL\s*A(?:L)?\s*PAGAR', upper)):
+        return text
+    width, height = page.rect.width, page.rect.height
+    # Commercial ENEL portrait template: the payment box is in the footer.
+    # Only use it when its printed label is actually recognized by local OCR.
+    clip = pymupdf.Rect(.40 * width, .905 * height, .54 * width, .985 * height)
+    native = page.get_text('text', clip=clip)
+    amounts = set(re.findall(r'\$\s*\d+(?:[.,]\d+)*', native))
+    if len(amounts) != 1:
+        return text
+    label = _ocr_page(page, clip=clip, dpi=400)
+    if not re.search(r'TOTAL\s*A(?:L)?\s*PAGAR', label.upper()):
+        logger.info('Etiqueta de pago no reconocida en el recuadro ENEL comercial')
+        return text
+    logger.info('Etiqueta de pago recuperada con OCR localizado; importe tomado del texto nativo')
+    return text + '\nTOTAL A PAGAR\n' + amounts.pop()
 
 
 def extract_text(pdf_bytes: bytes, min_characters: int = 100) -> str:
@@ -53,7 +77,7 @@ def extract_text(pdf_bytes: bytes, min_characters: int = 100) -> str:
             characters = sum(character.isalnum() for character in text)
             if characters >= min_characters:
                 logger.info('Página %s: texto directo (%s caracteres útiles)', page_number, characters)
-                result.append(text.strip())
+                result.append(_supplement_payment_label(page, text.strip()))
             else:
                 logger.info('Página %s: OCR local en español (%s caracteres; mínimo %s)', page_number, characters, min_characters)
                 result.append(_ocr_page(page))

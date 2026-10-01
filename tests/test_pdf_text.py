@@ -74,3 +74,32 @@ def test_native_table_keeps_labels_separate_from_values(monkeypatch):
         page.insert_text((20, 45), '14988 kWh', fontsize=7)
         pdf = document.tobytes()
     assert extract_text(pdf, min_characters=10) == 'CONSUMO MES:\n14988 kWh'
+
+
+def commercial_pdf(amount='$0'):
+    with pymupdf.open() as document:
+        page = document.new_page(width=612, height=792)
+        page.insert_text((20, 40), 'ENEL COLOMBIA\nCONSUMO ACTIVA SENCILLA\nSUBTOTAL VALOR CONSUMO\nFECHA EXPEDICION')
+        page.insert_text((270, 770), amount)
+        return document.tobytes()
+
+
+def test_commercial_native_pdf_recovers_raster_payment_label(monkeypatch):
+    def ocr(page, clip=None, dpi=300):
+        assert clip is not None
+        assert dpi == 400
+        return 'Totala\nPagar\n80'
+    monkeypatch.setattr('services.pdf_text._ocr_page', ocr)
+    text = extract_text(commercial_pdf(), min_characters=10)
+    # Native digits remain authoritative; OCR only identifies the raster label.
+    assert text.endswith('TOTAL A PAGAR\n$0')
+
+
+def test_unrecognized_raster_label_does_not_invent_total(monkeypatch):
+    monkeypatch.setattr('services.pdf_text._ocr_page', lambda *args, **kwargs: 'Total energia')
+    assert 'TOTAL A PAGAR' not in extract_text(commercial_pdf(), min_characters=10)
+
+
+def test_ambiguous_native_footer_amounts_are_not_used(monkeypatch):
+    monkeypatch.setattr('services.pdf_text._ocr_page', lambda *args, **kwargs: 'Total a Pagar')
+    assert 'TOTAL A PAGAR' not in extract_text(commercial_pdf('$0 $100'), min_characters=10)

@@ -17,3 +17,9 @@ logs/
 .DS_Store
 
 data/catalog/ocr_pending/
+Archive.zip
+*.tar.gz
+data/catalog/
+data/reports/
+mlflow.db
+mlflow.db-*

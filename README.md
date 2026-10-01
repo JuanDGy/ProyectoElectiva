@@ -27,7 +27,9 @@ Todavía no recorre automáticamente todas las subcarpetas del histórico 2025.
 1. Autorizar Google Drive y Sheets con OAuth del usuario.
 2. Tomar un PDF de `01A_LISTAS_PARA_PROCESAR` y moverlo a `01B_PROCESANDO`.
 3. Leer el texto con PyMuPDF; usar EasyOCR local en español en las páginas que
-   no alcancen `PDF_MIN_TEXT_CHARACTERS` caracteres alfanuméricos.
+   no alcancen `PDF_MIN_TEXT_CHARACTERS` caracteres alfanuméricos. En el formato
+   comercial ENEL, recuperar con OCR localizado la etiqueta de pago que es una
+   imagen, conservando los dígitos nativos del importe.
 4. Identificar facturas de energía mediante términos del texto.
 5. Extraer número de cliente, número de factura, consumo, valor total y periodo
    con reglas locales para facturas ENEL, sin catálogo ni API de IA.
@@ -137,31 +139,44 @@ Los conflictos entre valores repetidos del texto se conservan en Observaciones p
 Las reglas reconocen el formato ENEL; un formato distinto puede necesitar nuevas
 reglas. No se infieren importes ni se corrigen dígitos ambiguos automáticamente.
 
+También se reconoce el formato comercial con tabla de lecturas, como las facturas
+de Biblioteca. Los kWh se toman de la energía activa facturada, verificando la
+diferencia de lecturas, el factor y el valor de la fila. El periodo se obtiene del
+rango de fechas de ese formato. El recuadro de pago del pie se lee a 400 DPI para
+identificar su etiqueta; el importe se toma del texto nativo de ese mismo recuadro.
+Un saldo a crédito puede tener consumo positivo y total a pagar de cero. No se
+sustituye ese cero por el subtotal de energía. Si no se identifica la etiqueta o
+la tabla no es coherente, la factura sigue pendiente de revisión.
+
 La hoja `LISTA_CUENTAS_ENERGIA` existente no se modifica ni se usa. `Predicciones`
 usa: Fecha ejecución, Sede, Año, Mes, Consumo predicho (kWh), Modelo.
 
-## Modelado: estado actual y siguiente etapa
+## Modelado y MLOps
 
-`ml/train.py` lee únicamente `BD_energia`, construye rezagos y promedios móviles,
-y permite entrenar Regresión Lineal o Random Forest. Guarda modelos y métricas
-MAE, RMSE y R² en `models/`.
+El ciclo de vida del modelo está desacoplado de la ingesta. Usa snapshots del
+histórico, registra experimentos localmente con MLflow, versiona candidatos y
+permite promover un modelo a champion y monitorear cambios de consumo.
+Consulta [docs/MLOPS.md](docs/MLOPS.md) para las opciones y políticas.
 
 ```bash
+uv run python -m ml.snapshot
 uv run python -m ml.train --model linear
 uv run python -m ml.train --model random_forest
-uv run python -m ml.predict --help
+uv run mlflow ui
+uv run python -m ml.promote --list
+uv run python -m ml.predict --sede CAMPUS --year 2026 --month 4 --no-log
+uv run python -m ml.monitor
 ```
 
-La implementación de ML sigue siendo una base experimental: falta validar la
-cobertura mensual, duplicados, varias cuentas por sede y la separación temporal
-de entrenamiento/evaluación. El objetivo actual es la siguiente observación de
-consumo, que solo equivale al mes siguiente cuando no hay huecos. La predicción
-requiere suministrar los rezagos manualmente. Los modelos anteriores que incluían
-el tipo de servicio deben reentrenarse con las nuevas variables.
+La predicción calcula los rezagos desde el histórico; `--no-log` permite probar
+sin escribir en Sheets. Los experimentos y el registro de modelos quedan en el
+equipo. La ingesta no usa servicios externos de IA.
 
-Antes de evaluar el modelo con datos reales, hay que estructurar el histórico
-de Drive y guardar una copia reproducible del dataset. La extracción del valor
-facturado está implementada; la predicción de costos todavía no.
+El módulo ML sigue siendo experimental: hay que validar meses faltantes,
+varias cuentas por sede y la correspondencia temporal de features y objetivo
+antes de usar sus predicciones. Actualmente conserva la última fila de cada
+sede/mes, por lo que varias facturas del mismo mes requieren consolidación previa.
+La predicción de costos todavía no está implementada.
 
 ## Docker
 
@@ -185,18 +200,4 @@ dentro del contenedor. Las credenciales no se incluyen en la imagen.
 
 ```bash
 uv run python -m pytest -q
-```
-
-## MLOps
-
-Ciclo de vida del modelo (tracking MLflow local, registro champion/challenger,
-snapshots versionados con MD5, monitoreo de drift): ver `docs/MLOPS.md`.
-
-```bash
-uv run python -m ml.snapshot                 # respaldar BD_energia
-uv run python -m ml.train --model linear     # entrenar + tracking
-uv run mlflow ui                             # comparar experimentos
-uv run python -m ml.promote --list           # comparar con el champion
-uv run python -m ml.predict --sede CAMPUS --year 2026 --month 4 --no-log
-uv run python -m ml.monitor                  # exit 2 => reentrenar
 ```
