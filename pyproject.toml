@@ -1,0 +1,36 @@
+[project]
+name = "ecodata-python"
+version = "0.1.0"
+description = "Procesamiento de facturas de energía y modelado de consumo para EcoData ECCI"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "easyocr>=1.7.2",
+    "google-api-python-client>=2.0",
+    "google-auth>=2.0",
+    "google-auth-httplib2>=0.2",
+    "google-auth-oauthlib>=1.2",
+    "joblib>=1.3",
+    "numpy>=1.26",
+    "pandas>=2.0",
+    "pytest>=8.0",
+    "pymupdf>=1.24",
+    "python-dotenv>=1.0",
+    "scikit-learn>=1.4",
+    "torch>=2.2",
+    "torchvision>=0.17",
+]
+
+[build-system]
+requires = ["uv_build>=0.12.17,<0.13.0"]
+build-backend = "uv_build"
+
+# OCR runs on CPU; avoid downloading CUDA runtimes on Linux/Windows.
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux' or sys_platform == 'win32'" }]
+torchvision = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux' or sys_platform == 'win32'" }]
