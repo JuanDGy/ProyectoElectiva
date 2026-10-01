@@ -186,3 +186,17 @@ dentro del contenedor. Las credenciales no se incluyen en la imagen.
 ```bash
 uv run python -m pytest -q
 ```
+
+## MLOps
+
+Ciclo de vida del modelo (tracking MLflow local, registro champion/challenger,
+snapshots versionados con MD5, monitoreo de drift): ver `docs/MLOPS.md`.
+
+```bash
+uv run python -m ml.snapshot                 # respaldar BD_energia
+uv run python -m ml.train --model linear     # entrenar + tracking
+uv run mlflow ui                             # comparar experimentos
+uv run python -m ml.promote --list           # comparar con el champion
+uv run python -m ml.predict --sede CAMPUS --year 2026 --month 4 --no-log
+uv run python -m ml.monitor                  # exit 2 => reentrenar
+```

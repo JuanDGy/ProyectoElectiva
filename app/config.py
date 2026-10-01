@@ -58,3 +58,27 @@ def get_settings() -> Settings:
         pdf_min_text_characters=pdf_min_text_characters,
         drive_history_root_id=os.getenv("DRIVE_HISTORY_ROOT_ID", ""),
     )
+
+
+@dataclass(frozen=True)
+class MLSettings:
+    """Ajustes mínimos para el ciclo de vida ML (sin requerir carpetas de Drive)."""
+
+    google_client_secret_file: str
+    google_token_file: str
+    spreadsheet_id: str
+    sheet_bd_energy: str
+    sheet_predictions: str
+
+
+def get_ml_settings() -> MLSettings:
+    spreadsheet_id = os.getenv("GOOGLE_SPREADSHEET_ID", "").strip()
+    if not spreadsheet_id:
+        raise RuntimeError("Falta la variable obligatoria GOOGLE_SPREADSHEET_ID en .env")
+    return MLSettings(
+        google_client_secret_file=os.getenv("GOOGLE_CLIENT_SECRET_FILE", "credentials.json"),
+        google_token_file=os.getenv("GOOGLE_TOKEN_FILE", "token.json"),
+        spreadsheet_id=spreadsheet_id,
+        sheet_bd_energy=os.getenv("SHEET_BD_ENERGIA", "BD_energia"),
+        sheet_predictions=os.getenv("SHEET_PREDICCIONES", "Predicciones"),
+    )

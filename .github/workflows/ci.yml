@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Sync dependencies (locked, CPU-only torch)
+        run: uv sync --frozen
+
+      - name: Syntax check
+        run: uv run python -m compileall -q app pipeline ml services scripts main.py
+
+      - name: Unit tests
+        run: uv run python -m pytest -q

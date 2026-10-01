@@ -1,0 +1,13 @@
+{
+  "generated_at": "2026-10-01T17:41:17.622008+00:00",
+  "inventory_pdfs": 1333,
+  "sample_pdfs": 315,
+  "identified_accounts": 114,
+  "confirmed_accounts": 81,
+  "review_accounts": 33,
+  "unidentified_samples": 0,
+  "ocr_samples": 27,
+  "generated_codes": "ECCI- + first 8 SHA256 characters of normalized folder path; not institutional codes",
+  "criteria": "One observed office folder, at least two distinct PDF SHA256 hashes, account extracted from native/OCR first-page header; generic account/review folders excluded",
+  "unidentified_files": []
+}

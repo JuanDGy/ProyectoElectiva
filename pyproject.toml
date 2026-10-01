@@ -19,6 +19,7 @@ dependencies = [
     "scikit-learn>=1.4",
     "torch>=2.2",
     "torchvision>=0.17",
+    "mlflow>=3.16.1",
 ]
 
 [build-system]
