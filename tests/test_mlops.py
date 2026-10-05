@@ -57,11 +57,11 @@ def test_build_features_lags_and_target():
     assert {"lag_1", "lag_2", "rolling_3", "target_consumo"} <= set(df.columns)
     assert not df[["lag_1", "lag_2", "rolling_3", "target_consumo"]].isna().any().any()
     first_a = df[df["Sede"] == "A"].iloc[0]
-    assert first_a["Mes"] == 3
-    assert first_a["lag_1"] == 105
-    assert first_a["lag_2"] == 100
-    assert first_a["rolling_3"] == pytest.approx(102.5)
-    assert first_a["target_consumo"] == 115
+    assert first_a["Mes"] == 2
+    assert first_a["lag_1"] == 100
+    assert first_a["lag_2_missing"] == 1
+    assert first_a["rolling_3"] == 100
+    assert first_a["target_consumo"] == 105
 
 
 def test_temporal_split_uses_latest_periods():
@@ -74,7 +74,7 @@ def test_temporal_split_uses_latest_periods():
 
 def test_regression_metrics_include_mape():
     metrics = regression_metrics([100.0, 200.0, 300.0], [110.0, 190.0, 300.0])
-    assert set(metrics) == {"mae", "rmse", "r2", "mape"}
+    assert {"mae", "rmse", "r2", "mape", "wape", "n", "mape_n"} == set(metrics)
     assert metrics["mape"] == pytest.approx((10 + 5 + 0) / 3, rel=1e-6)
     assert metrics["mae"] == pytest.approx(20 / 3, rel=1e-6)
 
@@ -101,6 +101,8 @@ def _candidate(cid: str, mape: float, model_file: Path) -> dict:
         "train_rows": 12, "test_rows": 4, "test_periods": [],
         "data_snapshot": "x.csv", "data_md5": "abc",
         "baseline_per_sede": {}, "timestamp": "2026-01-01T00:00:00", "git_sha": "abc",
+        "promotion_eligible": True, "evaluation_id": "same-test",
+        "baseline_metrics": {"persistence": {"mae": 20}, "rolling_mean": {"mae": 30}},
     }
 
 

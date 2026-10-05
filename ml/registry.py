@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import math
 import shutil
 from pathlib import Path
 
@@ -47,7 +48,7 @@ def champion_model_path(path: Path = REGISTRY_PATH) -> Path | None:
 
 def promote(
     candidate_id: str,
-    metric: str = "mape",
+    metric: str = "mae",
     min_improvement: float = 0.0,
     path: Path = REGISTRY_PATH,
 ) -> tuple[bool, str]:
@@ -64,8 +65,20 @@ def promote(
         return False, f"Candidato {candidate_id} no existe en el registro."
     if candidate["metrics"].get(metric) is None:
         return False, f"El candidato no tiene métrica {metric}."
+    if not math.isfinite(candidate['metrics'][metric]):
+        return False, 'Métrica no finita.'
+    baselines = candidate.get('baseline_metrics', {})
+    candidate_mae = candidate['metrics'].get('mae')
+    baseline_maes = [b.get('mae') for b in baselines.values()]
+    if (not candidate.get('promotion_eligible') or not candidate.get('evaluation_id') or
+            candidate_mae is None or not math.isfinite(candidate_mae) or not baseline_maes or
+            any(v is None or not math.isfinite(v) for v in baseline_maes) or
+            candidate_mae >= min(baseline_maes)):
+        return False, 'No elegible: requiere evaluación v1 y mejora de MAE frente a cada baseline.'
 
     champion = registry.get("champion")
+    if champion and champion.get('evaluation_id') != candidate['evaluation_id']:
+        return False, 'Conjuntos de evaluación distintos: reevalúa ambos modelos en el mismo test.'
     higher_is_better = metric == "r2"
     if champion is None:
         _deploy(candidate, registry, path, motivo="sin champion previo")
@@ -76,7 +89,7 @@ def promote(
     if old is None:
         return False, f"El champion no tiene métrica {metric}; promoción manual requerida."
     improvement = (new - old) if higher_is_better else (old - new)
-    if improvement < min_improvement:
+    if improvement <= 0 or improvement < min_improvement:
         return False, (
             f"Sin mejora suficiente en {metric}: champion={old:.4f}, "
             f"candidato={new:.4f} (mínimo exigido: {min_improvement})."

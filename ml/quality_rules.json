@@ -1,0 +1,6 @@
+{
+  "version": "2026-10-05-audit",
+  "questionable_consumption": [
+    {"account": "07527596", "invoice": "357250391-1", "reason": "59410 kWh confirmed; ENEL labels Consumo en Revisión / lectura Promedio. Evaluate inclusion in pre-test validation."}
+  ]
+}

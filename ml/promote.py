@@ -9,7 +9,7 @@ from ml.registry import get_champion, load_registry, promote
 def main() -> int:
     parser = argparse.ArgumentParser(description="Promover un candidato a champion.")
     parser.add_argument("--candidate", default=None, help="ID del candidato (run).")
-    parser.add_argument("--metric", choices=["mape", "mae", "rmse", "r2"], default="mape")
+    parser.add_argument("--metric", choices=["mape", "mae", "rmse", "r2", "wape"], default="mae")
     parser.add_argument("--min-improvement", type=float, default=0.0)
     parser.add_argument("--list", action="store_true", help="Listar registro y salir.")
     args = parser.parse_args()
