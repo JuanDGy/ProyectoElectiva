@@ -153,30 +153,21 @@ usa: Fecha ejecución, Sede, Año, Mes, Consumo predicho (kWh), Modelo.
 
 ## Modelado y MLOps
 
-El ciclo de vida del modelo está desacoplado de la ingesta. Usa snapshots del
-histórico, registra experimentos localmente con MLflow, versiona candidatos y
-permite promover un modelo a champion y monitorear cambios de consumo.
-Consulta [docs/MLOPS.md](docs/MLOPS.md) para las opciones y políticas.
+La primera versión predice consumo eléctrico a un mes **por cuenta**, conservando la sede como trazabilidad. Usa snapshots versionados, rezagos por calendario, validación temporal y comparación de regresión lineal/Random Forest con referencias simples. No se imputan consumos objetivo ni se usan datos futuros. Los candidatos quedan registrados sin promoción automática.
+
+Consulta [docs/MLOPS.md](docs/MLOPS.md) para las reglas y comandos, [la auditoría](docs/AUDITORIA_MODELO_V1.md) para los problemas de datos y [los resultados](docs/RESULTADOS_MODELO_V1.md) para el entrenamiento real.
 
 ```bash
 uv run python -m ml.snapshot
-uv run python -m ml.train --model linear
-uv run python -m ml.train --model random_forest
-uv run mlflow ui
+uv run python -m ml.train --model both --test-start 2025-11-01 --test-end 2025-12-01
 uv run python -m ml.promote --list
-uv run python -m ml.predict --sede CAMPUS --year 2026 --month 4 --no-log
-uv run python -m ml.monitor
+uv run mlflow ui --backend-store-uri sqlite:///mlruns/v1_tracking.db
+# Sustituir ID_CANDIDATO por el ID del modelo que se quiere probar.
+uv run python -m ml.predict --cuenta 04525220 --year 2025 --month 11 \
+  --model-path models/candidates/ID_CANDIDATO/model.joblib
 ```
 
-La predicción calcula los rezagos desde el histórico; `--no-log` permite probar
-sin escribir en Sheets. Los experimentos y el registro de modelos quedan en el
-equipo. La ingesta no usa servicios externos de IA.
-
-El módulo ML sigue siendo experimental: hay que validar meses faltantes,
-varias cuentas por sede y la correspondencia temporal de features y objetivo
-antes de usar sus predicciones. Actualmente conserva la última fila de cada
-sede/mes, por lo que varias facturas del mismo mes requieren consolidación previa.
-La predicción de costos todavía no está implementada.
+Cada candidato exporta train/test, exclusiones, validaciones y predicciones con hashes de datos y código. La inferencia v1 entrega salida local. Totales por sede, costos y publicación en Sheets requieren conciliar cuentas/sedes y su esquema. El histórico actual no permite validar estacionalidad anual ni precisión para una fecha reciente sin actualizar las facturas.
 
 ## Docker
 
