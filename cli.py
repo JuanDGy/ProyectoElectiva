@@ -26,7 +26,12 @@ def status():
     if files:
         last = json.loads(files[-1].read_text())
         print("Últimas propuestas:", last.get("resumen"))
-    print("Sheets: Predicciones_Cuenta y Graficos_Predicciones")
+    selected = ROOT / "models/auto_selection.json"
+    if selected.exists():
+        choice = json.loads(selected.read_text(encoding="utf-8"))
+        print("Seleccionado por validación:", choice.get("selected_candidate"))
+        print("Estado de selección:", choice.get("status"))
+    print("Sheets: Predicciones_Cuenta, Historial_Predicciones y Graficos_Predicciones")
     return 0
 
 
@@ -44,6 +49,16 @@ def setup():
     pred.add_argument("--anio", type=int)
     pred.add_argument("--mes", type=int)
     pred.add_argument("--publicar", action="store_true")
+    pred.add_argument("--sincronizar", action="store_true",
+                      help="Actualizar predicciones vigentes, archivar versiones anteriores y agregar nuevas")
+    auto = sub.add_parser("entrenar", help="Entrenar familias, seleccionar mejor por validación y controlar Champion")
+    auto.add_argument("--modelos", default="all", help="all o familias separadas por coma")
+    auto.add_argument("--seleccion", choices=("automatica",), default="automatica")
+    auto.add_argument("--reporte", help="Reporte experimental del snapshot actual")
+    auto.add_argument("--evaluar", action="store_true",
+                      help="Volver a ejecutar competencia antes del entrenamiento")
+    auto.add_argument("--sin-promover", action="store_true")
+
     charts = sub.add_parser("graficos", help="Gráficos nativos de Google Sheets")
     charts.add_argument("--modelo", help="ID del modelo previamente publicado")
     charts.add_argument("--anio", type=int)
@@ -74,6 +89,12 @@ def dispatch(args, parser):
     cmd = args.command
     if cmd == "estado":
         return status()
+    if cmd == "entrenar":
+        return invoke("ml.train_auto", "--modelos", args.modelos,
+                      "--seleccion", args.seleccion,
+                      *(["--reporte", args.reporte] if args.reporte else []),
+                      *(["--evaluar"] if args.evaluar else []),
+                      *(["--sin-promover"] if args.sin_promover else []))
     if cmd == "procesar":
         if args.limite < 1:
             parser.error("--limite debe ser positivo")
@@ -91,7 +112,8 @@ def dispatch(args, parser):
         if args.anio is not None:
             options += ["--year", args.anio, "--month", args.mes]
         return invoke("ml.publish" if cmd == "predicciones" else "ml.sheets_dashboard",
-                      *options, *(["--write"] if args.publicar else []))
+                      *options, *(["--write"] if args.publicar else []),
+                      *(["--sync"] if cmd == "predicciones" and args.sincronizar else []))
     if cmd == "comparativas":
         only = {"todas": "all", "ocr": "ocr", "modelos": "models"}[args.solo]
         return invoke("ml.comparisons", "--only", only,
@@ -141,13 +163,14 @@ def main(argv=None):
             "4": ["predicciones"], "5": ["graficos"],
             "6": ["competencia", "--modelos", "rbf,lstm,mlp,svr", "--enfoques", "level"],
             "7": ["comparar-ocr"], "8": ["pendientes", "revisar"],
-            "9": ["comparativas"],
+            "9": ["comparativas"], "10": ["entrenar", "--modelos", "all"],
         }
         print("\nEcoData ECCI — Menú")
         for k, label in zip(options, ["Estado", "Ingesta (1)", "Histórico (10)",
                         "Predicciones (lectura)", "Gráficos Sheets (lectura)",
                         "Competencia neuronal", "Comparación OCR/LLM",
-                        "Revisión de pendientes", "Comparativas en Sheets (vista previa)"]):
+                        "Revisión de pendientes", "Comparativas en Sheets (vista previa)",
+                        "Entrenar y seleccionar automáticamente"]):
             print(k + ". " + label)
         print("0. Salir")
         selection = input("Opción: ").strip()

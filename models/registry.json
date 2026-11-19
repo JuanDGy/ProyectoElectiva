@@ -5940,6 +5940,708 @@
       "prediction_protocol": "rolling_one_month_prior_actuals",
       "timestamp": "2026-11-18T13:06:31",
       "mlflow_run_id": "a813aafce6b045f28d5a3a8a2ab99276"
+    },
+    {
+      "id": "auto_et_20261119_170211_75136a",
+      "model_path": "models/candidates/auto_et_20261119_170211_75136a/model.joblib",
+      "model_type": "et",
+      "approach": "delta",
+      "dataset_version": "account-calendar-v1",
+      "data_snapshot": "data/raw/bd_energia_20261119_161533.csv",
+      "data_sha256": "12b23bf617d1f33d08feb82b1ebd90d6b7f8bea4549a9f66521c546eb6162b86",
+      "validation_metrics": {
+        "mae": 461.8821437051089
+      },
+      "metrics": {
+        "mae": 480.0178210901327,
+        "rmse": 1449.4491560608637,
+        "r2": 0.9397212743196718,
+        "mape": 193.26877203536392,
+        "mape_n": 65,
+        "n": 70,
+        "wape": 26.541689028506998
+      },
+      "baseline_metrics": {
+        "persistence": {
+          "mae": 448.24285714285713,
+          "rmse": 1479.5481115143618,
+          "r2": 0.9371918104416903,
+          "mape": 85.73323738126187,
+          "mape_n": 65,
+          "n": 70,
+          "wape": 24.78475173383466
+        },
+        "rolling_mean": {
+          "mae": 515.3380952380952,
+          "rmse": 1874.5894238303244,
+          "r2": 0.8991744926498582,
+          "mape": 93.0028101117892,
+          "mape_n": 65,
+          "n": 70,
+          "wape": 28.494657630188996
+        }
+      },
+      "promotion_eligible": false,
+      "evaluation_id": "12b23bf617d1f33d08fe-test-70-",
+      "report": "reports/experiment_models_20261119_161755.json",
+      "train_rows": 481,
+      "test_rows": 70,
+      "parameters": {
+        "max_depth": 4
+      },
+      "seasonal": false,
+      "trained_at": "2026-11-19T17:02:11",
+      "fit_scope": "all_observed_after_holdout_evaluation",
+      "report_test_metrics_are_pre_refit": true,
+      "confidence_notice": "Experimental hasta pasar controles de promoción."
+    },
+    {
+      "id": "auto_gbr_20261119_170211_24e909",
+      "model_path": "models/candidates/auto_gbr_20261119_170211_24e909/model.joblib",
+      "model_type": "gbr",
+      "approach": "level",
+      "dataset_version": "account-calendar-v1",
+      "data_snapshot": "data/raw/bd_energia_20261119_161533.csv",
+      "data_sha256": "12b23bf617d1f33d08feb82b1ebd90d6b7f8bea4549a9f66521c546eb6162b86",
+      "validation_metrics": {
+        "mae": 458.6765559873145
+      },
+      "metrics": {
+        "mae": 495.5340875749921,
+        "rmse": 1731.1889835094084,
+        "r2": 0.9140101778582718,
+        "mape": 307.2556019352044,
+        "mape_n": 65,
+        "n": 70,
+        "wape": 27.399632008601593
+      },
+      "baseline_metrics": {
+        "persistence": {
+          "mae": 448.24285714285713,
+          "rmse": 1479.5481115143618,
+          "r2": 0.9371918104416903,
+          "mape": 85.73323738126187,
+          "mape_n": 65,
+          "n": 70,
+          "wape": 24.78475173383466
+        },
+        "rolling_mean": {
+          "mae": 515.3380952380952,
+          "rmse": 1874.5894238303244,
+          "r2": 0.8991744926498582,
+          "mape": 93.0028101117892,
+          "mape_n": 65,
+          "n": 70,
+          "wape": 28.494657630188996
+        }
+      },
+      "promotion_eligible": false,
+      "evaluation_id": "12b23bf617d1f33d08fe-test-70-",
+      "report": "reports/experiment_models_20261119_161755.json",
+      "train_rows": 481,
+      "test_rows": 70,
+      "parameters": {
+        "max_depth": 2
+      },
+      "seasonal": false,
+      "trained_at": "2026-11-19T17:02:11",
+      "fit_scope": "all_observed_after_holdout_evaluation",
+      "report_test_metrics_are_pre_refit": true,
+      "confidence_notice": "Experimental hasta pasar controles de promoción."
+    },
+    {
+      "id": "auto_hgb_20261119_170212_77650e",
+      "model_path": "models/candidates/auto_hgb_20261119_170212_77650e/model.joblib",
+      "model_type": "hgb",
+      "approach": "delta",
+      "dataset_version": "account-calendar-v1",
+      "data_snapshot": "data/raw/bd_energia_20261119_161533.csv",
+      "data_sha256": "12b23bf617d1f33d08feb82b1ebd90d6b7f8bea4549a9f66521c546eb6162b86",
+      "validation_metrics": {
+        "mae": 568.2272540017201
+      },
+      "metrics": {
+        "mae": 711.2009511570541,
+        "rmse": 1800.6399004409718,
+        "r2": 0.906972397173251,
+        "mape": 122.71822227847852,
+        "mape_n": 65,
+        "n": 70,
+        "wape": 39.32452849254632
+      },
+      "baseline_metrics": {
+        "persistence": {
+          "mae": 448.24285714285713,
+          "rmse": 1479.5481115143618,
+          "r2": 0.9371918104416903,
+          "mape": 85.73323738126187,
+          "mape_n": 65,
+          "n": 70,
+          "wape": 24.78475173383466
+        },
+        "rolling_mean": {
+          "mae": 515.3380952380952,
+          "rmse": 1874.5894238303244,
+          "r2": 0.8991744926498582,
+          "mape": 93.0028101117892,
+          "mape_n": 65,
+          "n": 70,
+          "wape": 28.494657630188996
+        }
+      },
+      "promotion_eligible": false,
+      "evaluation_id": "12b23bf617d1f33d08fe-test-70-",
+      "report": "reports/experiment_models_20261119_161755.json",
+      "train_rows": 481,
+      "test_rows": 70,
+      "parameters": {
+        "l2": 1.0
+      },
+      "seasonal": false,
+      "trained_at": "2026-11-19T17:02:12",
+      "fit_scope": "all_observed_after_holdout_evaluation",
+      "report_test_metrics_are_pre_refit": true,
+      "confidence_notice": "Experimental hasta pasar controles de promoción."
+    },
+    {
+      "id": "auto_huber_20261119_170212_ebb85c",
+      "model_path": "models/candidates/auto_huber_20261119_170212_ebb85c/model.joblib",
+      "model_type": "huber",
+      "approach": "delta",
+      "dataset_version": "account-calendar-v1",
+      "data_snapshot": "data/raw/bd_energia_20261119_161533.csv",
+      "data_sha256": "12b23bf617d1f33d08feb82b1ebd90d6b7f8bea4549a9f66521c546eb6162b86",
+      "validation_metrics": {
+        "mae": 446.4234644643407
+      },
+      "metrics": {
+        "mae": 498.7673063193367,
+        "rmse": 1567.0412680585132,
+        "r2": 0.9295438417744781,
+        "mape": 117.94380752440598,
+        "mape_n": 65,
+        "n": 70,
+        "wape": 27.578406801334594
+      },
+      "baseline_metrics": {
+        "persistence": {
+          "mae": 448.24285714285713,
+          "rmse": 1479.5481115143618,
+          "r2": 0.9371918104416903,
+          "mape": 85.73323738126187,
+          "mape_n": 65,
+          "n": 70,
+          "wape": 24.78475173383466
+        },
+        "rolling_mean": {
+          "mae": 515.3380952380952,
+          "rmse": 1874.5894238303244,
+          "r2": 0.8991744926498582,
+          "mape": 93.0028101117892,
+          "mape_n": 65,
+          "n": 70,
+          "wape": 28.494657630188996
+        }
+      },
+      "promotion_eligible": false,
+      "evaluation_id": "12b23bf617d1f33d08fe-test-70-",
+      "report": "reports/experiment_models_20261119_161755.json",
+      "train_rows": 481,
+      "test_rows": 70,
+      "parameters": {
+        "alpha": 0.01
+      },
+      "seasonal": false,
+      "trained_at": "2026-11-19T17:02:12",
+      "fit_scope": "all_observed_after_holdout_evaluation",
+      "report_test_metrics_are_pre_refit": true,
+      "confidence_notice": "Experimental hasta pasar controles de promoción."
+    },
+    {
+      "id": "auto_linear_20261119_170212_de3ae8",
+      "model_path": "models/candidates/auto_linear_20261119_170212_de3ae8/model.joblib",
+      "model_type": "linear",
+      "approach": "delta",
+      "dataset_version": "account-calendar-v1",
+      "data_snapshot": "data/raw/bd_energia_20261119_161533.csv",
+      "data_sha256": "12b23bf617d1f33d08feb82b1ebd90d6b7f8bea4549a9f66521c546eb6162b86",
+      "validation_metrics": {
+        "mae": 727.6992288603997
+      },
+      "metrics": {
+        "mae": 507.85926489491874,
+        "rmse": 1530.858109712199,
+        "r2": 0.9327599590085394,
+        "mape": 221.61008929425483,
+        "mape_n": 65,
+        "n": 70,
+        "wape": 28.081129672383696
+      },
+      "baseline_metrics": {
+        "persistence": {
+          "mae": 448.24285714285713,
+          "rmse": 1479.5481115143618,
+          "r2": 0.9371918104416903,
+          "mape": 85.73323738126187,
+          "mape_n": 65,
+          "n": 70,
+          "wape": 24.78475173383466
+        },
+        "rolling_mean": {
+          "mae": 515.3380952380952,
+          "rmse": 1874.5894238303244,
+          "r2": 0.8991744926498582,
+          "mape": 93.0028101117892,
+          "mape_n": 65,
+          "n": 70,
+          "wape": 28.494657630188996
+        }
+      },
+      "promotion_eligible": false,
+      "evaluation_id": "12b23bf617d1f33d08fe-test-70-",
+      "report": "reports/experiment_models_20261119_161755.json",
+      "train_rows": 481,
+      "test_rows": 70,
+      "parameters": {},
+      "seasonal": false,
+      "trained_at": "2026-11-19T17:02:12",
+      "fit_scope": "all_observed_after_holdout_evaluation",
+      "report_test_metrics_are_pre_refit": true,
+      "confidence_notice": "Experimental hasta pasar controles de promoción."
+    },
+    {
+      "id": "auto_lstm_20261119_170213_5cd3ec",
+      "model_path": "models/candidates/auto_lstm_20261119_170213_5cd3ec/model.joblib",
+      "model_type": "lstm",
+      "approach": "delta",
+      "dataset_version": "account-calendar-v1",
+      "data_snapshot": "data/raw/bd_energia_20261119_161533.csv",
+      "data_sha256": "12b23bf617d1f33d08feb82b1ebd90d6b7f8bea4549a9f66521c546eb6162b86",
+      "validation_metrics": {
+        "mae": 570.7099412799686
+      },
+      "metrics": {
+        "mae": 565.5168882994149,
+        "rmse": 1562.2748043614731,
+        "r2": 0.9299718023978462,
+        "mape": 126.63853699718086,
+        "mape_n": 65,
+        "n": 70,
+        "wape": 31.26920028828184
+      },
+      "baseline_metrics": {
+        "persistence": {
+          "mae": 448.24285714285713,
+          "rmse": 1479.5481115143618,
+          "r2": 0.9371918104416903,
+          "mape": 85.73323738126187,
+          "mape_n": 65,
+          "n": 70,
+          "wape": 24.78475173383466
+        },
+        "rolling_mean": {
+          "mae": 515.3380952380952,
+          "rmse": 1874.5894238303244,
+          "r2": 0.8991744926498582,
+          "mape": 93.0028101117892,
+          "mape_n": 65,
+          "n": 70,
+          "wape": 28.494657630188996
+        }
+      },
+      "promotion_eligible": false,
+      "evaluation_id": "12b23bf617d1f33d08fe-test-70-",
+      "report": "reports/experiment_models_20261119_161755.json",
+      "train_rows": 481,
+      "test_rows": 70,
+      "parameters": {
+        "hidden": 12,
+        "epochs": 50
+      },
+      "seasonal": false,
+      "trained_at": "2026-11-19T17:02:13",
+      "fit_scope": "all_observed_after_holdout_evaluation",
+      "report_test_metrics_are_pre_refit": true,
+      "confidence_notice": "Experimental hasta pasar controles de promoción."
+    },
+    {
+      "id": "auto_mean_20261119_170213_77e633",
+      "model_path": "models/candidates/auto_mean_20261119_170213_77e633/model.joblib",
+      "model_type": "mean",
+      "approach": "delta",
+      "dataset_version": "account-calendar-v1",
+      "data_snapshot": "data/raw/bd_energia_20261119_161533.csv",
+      "data_sha256": "12b23bf617d1f33d08feb82b1ebd90d6b7f8bea4549a9f66521c546eb6162b86",
+      "validation_metrics": {
+        "mae": 458.87520418179264
+      },
+      "metrics": {
+        "mae": 589.7786942786945,
+        "rmse": 1530.9584327504376,
+        "r2": 0.9327511457211453,
+        "mape": 581.0905642662166,
+        "mape_n": 65,
+        "n": 70,
+        "wape": 32.61071154323814
+      },
+      "baseline_metrics": {
+        "persistence": {
+          "mae": 448.24285714285713,
+          "rmse": 1479.5481115143618,
+          "r2": 0.9371918104416903,
+          "mape": 85.73323738126187,
+          "mape_n": 65,
+          "n": 70,
+          "wape": 24.78475173383466
+        },
+        "rolling_mean": {
+          "mae": 515.3380952380952,
+          "rmse": 1874.5894238303244,
+          "r2": 0.8991744926498582,
+          "mape": 93.0028101117892,
+          "mape_n": 65,
+          "n": 70,
+          "wape": 28.494657630188996
+        }
+      },
+      "promotion_eligible": false,
+      "evaluation_id": "12b23bf617d1f33d08fe-test-70-",
+      "report": "reports/experiment_models_20261119_161755.json",
+      "train_rows": 481,
+      "test_rows": 70,
+      "parameters": {},
+      "seasonal": false,
+      "trained_at": "2026-11-19T17:02:13",
+      "fit_scope": "all_observed_after_holdout_evaluation",
+      "report_test_metrics_are_pre_refit": true,
+      "confidence_notice": "Experimental hasta pasar controles de promoción."
+    },
+    {
+      "id": "auto_mlp_20261119_170213_c6963a",
+      "model_path": "models/candidates/auto_mlp_20261119_170213_c6963a/model.joblib",
+      "model_type": "mlp",
+      "approach": "delta",
+      "dataset_version": "account-calendar-v1",
+      "data_snapshot": "data/raw/bd_energia_20261119_161533.csv",
+      "data_sha256": "12b23bf617d1f33d08feb82b1ebd90d6b7f8bea4549a9f66521c546eb6162b86",
+      "validation_metrics": {
+        "mae": 441.460796131048
+      },
+      "metrics": {
+        "mae": 507.9375593826839,
+        "rmse": 1569.945369387708,
+        "r2": 0.9292824556525057,
+        "mape": 210.2976253735088,
+        "mape_n": 65,
+        "n": 70,
+        "wape": 28.08545881987699
+      },
+      "baseline_metrics": {
+        "persistence": {
+          "mae": 448.24285714285713,
+          "rmse": 1479.5481115143618,
+          "r2": 0.9371918104416903,
+          "mape": 85.73323738126187,
+          "mape_n": 65,
+          "n": 70,
+          "wape": 24.78475173383466
+        },
+        "rolling_mean": {
+          "mae": 515.3380952380952,
+          "rmse": 1874.5894238303244,
+          "r2": 0.8991744926498582,
+          "mape": 93.0028101117892,
+          "mape_n": 65,
+          "n": 70,
+          "wape": 28.494657630188996
+        }
+      },
+      "promotion_eligible": false,
+      "evaluation_id": "12b23bf617d1f33d08fe-test-70-",
+      "report": "reports/experiment_models_20261119_161755.json",
+      "train_rows": 481,
+      "test_rows": 70,
+      "parameters": {
+        "hidden": 16
+      },
+      "seasonal": false,
+      "trained_at": "2026-11-19T17:02:13",
+      "fit_scope": "all_observed_after_holdout_evaluation",
+      "report_test_metrics_are_pre_refit": true,
+      "confidence_notice": "Experimental hasta pasar controles de promoción."
+    },
+    {
+      "id": "auto_rbf_20261119_170213_09d6ee",
+      "model_path": "models/candidates/auto_rbf_20261119_170213_09d6ee/model.joblib",
+      "model_type": "rbf",
+      "approach": "delta",
+      "dataset_version": "account-calendar-v1",
+      "data_snapshot": "data/raw/bd_energia_20261119_161533.csv",
+      "data_sha256": "12b23bf617d1f33d08feb82b1ebd90d6b7f8bea4549a9f66521c546eb6162b86",
+      "validation_metrics": {
+        "mae": 455.4611110145279
+      },
+      "metrics": {
+        "mae": 595.4715324493706,
+        "rmse": 1661.9779304130918,
+        "r2": 0.9207482983394465,
+        "mape": 285.99608808195495,
+        "mape_n": 65,
+        "n": 70,
+        "wape": 32.925486399039436
+      },
+      "baseline_metrics": {
+        "persistence": {
+          "mae": 448.24285714285713,
+          "rmse": 1479.5481115143618,
+          "r2": 0.9371918104416903,
+          "mape": 85.73323738126187,
+          "mape_n": 65,
+          "n": 70,
+          "wape": 24.78475173383466
+        },
+        "rolling_mean": {
+          "mae": 515.3380952380952,
+          "rmse": 1874.5894238303244,
+          "r2": 0.8991744926498582,
+          "mape": 93.0028101117892,
+          "mape_n": 65,
+          "n": 70,
+          "wape": 28.494657630188996
+        }
+      },
+      "promotion_eligible": false,
+      "evaluation_id": "12b23bf617d1f33d08fe-test-70-",
+      "report": "reports/experiment_models_20261119_161755.json",
+      "train_rows": 481,
+      "test_rows": 70,
+      "parameters": {
+        "centers": 24,
+        "gamma": 0.1
+      },
+      "seasonal": false,
+      "trained_at": "2026-11-19T17:02:13",
+      "fit_scope": "all_observed_after_holdout_evaluation",
+      "report_test_metrics_are_pre_refit": true,
+      "confidence_notice": "Experimental hasta pasar controles de promoción."
+    },
+    {
+      "id": "auto_rf_20261119_170213_587b09",
+      "model_path": "models/candidates/auto_rf_20261119_170213_587b09/model.joblib",
+      "model_type": "rf",
+      "approach": "delta",
+      "dataset_version": "account-calendar-v1",
+      "data_snapshot": "data/raw/bd_energia_20261119_161533.csv",
+      "data_sha256": "12b23bf617d1f33d08feb82b1ebd90d6b7f8bea4549a9f66521c546eb6162b86",
+      "validation_metrics": {
+        "mae": 477.54959534777606
+      },
+      "metrics": {
+        "mae": 508.62351234495594,
+        "rmse": 1644.164780769107,
+        "r2": 0.9224380403573887,
+        "mape": 180.70538198126295,
+        "mape_n": 65,
+        "n": 70,
+        "wape": 28.123387307972415
+      },
+      "baseline_metrics": {
+        "persistence": {
+          "mae": 448.24285714285713,
+          "rmse": 1479.5481115143618,
+          "r2": 0.9371918104416903,
+          "mape": 85.73323738126187,
+          "mape_n": 65,
+          "n": 70,
+          "wape": 24.78475173383466
+        },
+        "rolling_mean": {
+          "mae": 515.3380952380952,
+          "rmse": 1874.5894238303244,
+          "r2": 0.8991744926498582,
+          "mape": 93.0028101117892,
+          "mape_n": 65,
+          "n": 70,
+          "wape": 28.494657630188996
+        }
+      },
+      "promotion_eligible": false,
+      "evaluation_id": "12b23bf617d1f33d08fe-test-70-",
+      "report": "reports/experiment_models_20261119_161755.json",
+      "train_rows": 481,
+      "test_rows": 70,
+      "parameters": {
+        "max_depth": 4,
+        "min_samples_leaf": 5
+      },
+      "seasonal": false,
+      "trained_at": "2026-11-19T17:02:13",
+      "fit_scope": "all_observed_after_holdout_evaluation",
+      "report_test_metrics_are_pre_refit": true,
+      "confidence_notice": "Experimental hasta pasar controles de promoción."
+    },
+    {
+      "id": "auto_rf_mae_20261119_170216_b3e7ce",
+      "model_path": "models/candidates/auto_rf_mae_20261119_170216_b3e7ce/model.joblib",
+      "model_type": "rf_mae",
+      "approach": "delta",
+      "dataset_version": "account-calendar-v1",
+      "data_snapshot": "data/raw/bd_energia_20261119_161533.csv",
+      "data_sha256": "12b23bf617d1f33d08feb82b1ebd90d6b7f8bea4549a9f66521c546eb6162b86",
+      "validation_metrics": {
+        "mae": 440.12678227360317
+      },
+      "metrics": {
+        "mae": 505.56042857142864,
+        "rmse": 1741.2011612938445,
+        "r2": 0.9130126726803122,
+        "mape": 96.47006782502457,
+        "mape_n": 65,
+        "n": 70,
+        "wape": 27.95401981073951
+      },
+      "baseline_metrics": {
+        "persistence": {
+          "mae": 448.24285714285713,
+          "rmse": 1479.5481115143618,
+          "r2": 0.9371918104416903,
+          "mape": 85.73323738126187,
+          "mape_n": 65,
+          "n": 70,
+          "wape": 24.78475173383466
+        },
+        "rolling_mean": {
+          "mae": 515.3380952380952,
+          "rmse": 1874.5894238303244,
+          "r2": 0.8991744926498582,
+          "mape": 93.0028101117892,
+          "mape_n": 65,
+          "n": 70,
+          "wape": 28.494657630188996
+        }
+      },
+      "promotion_eligible": false,
+      "evaluation_id": "12b23bf617d1f33d08fe-test-70-",
+      "report": "reports/experiment_models_20261119_161755.json",
+      "train_rows": 481,
+      "test_rows": 70,
+      "parameters": {
+        "max_depth": 4,
+        "min_samples_leaf": 3
+      },
+      "seasonal": false,
+      "trained_at": "2026-11-19T17:02:16",
+      "fit_scope": "all_observed_after_holdout_evaluation",
+      "report_test_metrics_are_pre_refit": true,
+      "confidence_notice": "Experimental hasta pasar controles de promoción."
+    },
+    {
+      "id": "auto_ridge_20261119_170216_fcf448",
+      "model_path": "models/candidates/auto_ridge_20261119_170216_fcf448/model.joblib",
+      "model_type": "ridge",
+      "approach": "delta",
+      "dataset_version": "account-calendar-v1",
+      "data_snapshot": "data/raw/bd_energia_20261119_161533.csv",
+      "data_sha256": "12b23bf617d1f33d08feb82b1ebd90d6b7f8bea4549a9f66521c546eb6162b86",
+      "validation_metrics": {
+        "mae": 486.9709395703986
+      },
+      "metrics": {
+        "mae": 557.7967464933217,
+        "rmse": 1624.6822274090207,
+        "r2": 0.9242652928385205,
+        "mape": 402.74557924478074,
+        "mape_n": 65,
+        "n": 70,
+        "wape": 30.842329463761292
+      },
+      "baseline_metrics": {
+        "persistence": {
+          "mae": 448.24285714285713,
+          "rmse": 1479.5481115143618,
+          "r2": 0.9371918104416903,
+          "mape": 85.73323738126187,
+          "mape_n": 65,
+          "n": 70,
+          "wape": 24.78475173383466
+        },
+        "rolling_mean": {
+          "mae": 515.3380952380952,
+          "rmse": 1874.5894238303244,
+          "r2": 0.8991744926498582,
+          "mape": 93.0028101117892,
+          "mape_n": 65,
+          "n": 70,
+          "wape": 28.494657630188996
+        }
+      },
+      "promotion_eligible": false,
+      "evaluation_id": "12b23bf617d1f33d08fe-test-70-",
+      "report": "reports/experiment_models_20261119_161755.json",
+      "train_rows": 481,
+      "test_rows": 70,
+      "parameters": {
+        "alpha": 10.0
+      },
+      "seasonal": false,
+      "trained_at": "2026-11-19T17:02:16",
+      "fit_scope": "all_observed_after_holdout_evaluation",
+      "report_test_metrics_are_pre_refit": true,
+      "confidence_notice": "Experimental hasta pasar controles de promoción."
+    },
+    {
+      "id": "auto_svr_20261119_170216_faa6e3",
+      "model_path": "models/candidates/auto_svr_20261119_170216_faa6e3/model.joblib",
+      "model_type": "svr",
+      "approach": "delta",
+      "dataset_version": "account-calendar-v1",
+      "data_snapshot": "data/raw/bd_energia_20261119_161533.csv",
+      "data_sha256": "12b23bf617d1f33d08feb82b1ebd90d6b7f8bea4549a9f66521c546eb6162b86",
+      "validation_metrics": {
+        "mae": 436.2650646088992
+      },
+      "metrics": {
+        "mae": 463.0524751567451,
+        "rmse": 1493.4283238094704,
+        "r2": 0.9360078268967236,
+        "mape": 97.40368334694126,
+        "mape_n": 65,
+        "n": 70,
+        "wape": 25.60362190632724
+      },
+      "baseline_metrics": {
+        "persistence": {
+          "mae": 448.24285714285713,
+          "rmse": 1479.5481115143618,
+          "r2": 0.9371918104416903,
+          "mape": 85.73323738126187,
+          "mape_n": 65,
+          "n": 70,
+          "wape": 24.78475173383466
+        },
+        "rolling_mean": {
+          "mae": 515.3380952380952,
+          "rmse": 1874.5894238303244,
+          "r2": 0.8991744926498582,
+          "mape": 93.0028101117892,
+          "mape_n": 65,
+          "n": 70,
+          "wape": 28.494657630188996
+        }
+      },
+      "promotion_eligible": false,
+      "evaluation_id": "12b23bf617d1f33d08fe-test-70-",
+      "report": "reports/experiment_models_20261119_161755.json",
+      "train_rows": 481,
+      "test_rows": 70,
+      "parameters": {
+        "c": 50.0
+      },
+      "seasonal": false,
+      "trained_at": "2026-11-19T17:02:16",
+      "fit_scope": "all_observed_after_holdout_evaluation",
+      "report_test_metrics_are_pre_refit": true,
+      "confidence_notice": "Experimental hasta pasar controles de promoción."
     }
   ]
 }

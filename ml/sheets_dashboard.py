@@ -79,7 +79,7 @@ def select_forecasts(rows: list[dict], model: str | None = None,
     data["Mes"] = pd.to_numeric(data["Mes"], errors="coerce")
     # Google Sheets puede entregar decimales con coma según configuración regional.
     def parse_number(value):
-        txt = str(value or "").strip()
+        txt = str(value if value is not None else "").strip()  # 0 kWh también es válido
         if "," in txt and "." in txt:
             txt = (txt.replace(".", "").replace(",", ".")
                    if txt.rfind(",") > txt.rfind(".") else txt.replace(",", ""))
@@ -179,7 +179,9 @@ def build_dashboard(history: pd.DataFrame, predictions: pd.DataFrame,
         ["EcoData ECCI | Dashboard de predicciones"],
         [f"Periodo estimado: {year}-{month:02d} | Modelo: {model} | Cuentas con pronóstico: {len(predictions)}"],
         ["Datos históricos = facturas; tramo punteado = enlace del último dato real a una estimación. Huecos sin factura NO son consumos observados. Pronóstico experimental."],
-        ["Selecciona la cuenta:", primary, "Usa la lista desplegable de B4. El gráfico se actualizará automáticamente.", ""],
+        ["Selecciona la cuenta:", primary,
+         "Usa cada desplegable: cuenta en B4 y modelo en F4; los tres gráficos cambian solos.",
+         "", "Modelo:", model],
         ["Mes", "Consumo real (kWh)", "Enlace a estimación (kWh)", "",
          "Cuenta", "Pronóstico kWh", "", "Mes", "Cuentas con dato real", "Cuentas pronosticadas"],
     ]
@@ -241,6 +243,60 @@ def build_account_sources(history: pd.DataFrame, predictions: pd.DataFrame,
     return result
 
 
+
+def build_multimodel_sources(history: pd.DataFrame,
+                             models: dict[str, pd.DataFrame],
+                             period: tuple[int, int]) -> tuple[list[list], list[str], list[str]]:
+    """Origen único de los tres gráficos interactivos para todos los modelos.
+
+    A:F histórico + enlace; G/H listas; I:K ranking; L:N cobertura. Todas las
+    claves incluyen el MODELO para evitar mezclar predicciones incompatibles.
+    """
+    year, month = period
+    target = f"{year}-{month:02d}"
+    model_names = sorted(models)
+    account_options = sorted({
+        str(account) for frame in models.values() for account in frame["Cuenta"]
+    })
+    rows = [[
+        "Modelo|Cuenta|Mes", "Modelo", "Cuenta", "Mes", "Consumo real",
+        "Enlace estimado", "Cuentas (selector)", "Modelos (selector)",
+        "Modelo|Posición", "Cuenta top", "kWh top",
+        "Modelo|Mes", "Con real", "Con predicción",
+    ]]
+    rankings, coverage = [], []
+    for name, forecasts in sorted(models.items()):
+        source = build_account_sources(history, forecasts, (year, month, name))
+        count_real_by_month = {}
+        for line in source[1:]:
+            key, account, m, real, link, _ = line
+            rows.append([f"{name}|{key}", name, account, m,
+                         real, link, "", "", "", "", "", "", "", ""])
+            count_real_by_month[m] = count_real_by_month.get(m, 0) + (
+                0 if real == "SIN_DATO" else 1)
+        rank = forecasts.sort_values("Consumo predicho (kWh)", ascending=False)
+        for index, (_, record) in enumerate(rank.head(15).iterrows(), start=1):
+            rankings.append((
+                f"{name}|{index}", str(record["Cuenta"]),
+                round(float(record["Consumo predicho (kWh)"]), 3)))
+        for m in sorted(count_real_by_month):
+            coverage.append((
+                f"{name}|{m}", count_real_by_month[m],
+                len(forecasts) if m == target else "SIN_DATO"))
+    if not rows[1:]:
+        raise RuntimeError("No hay fuentes de predicción para los modelos seleccionados")
+    # Los rangos desplegables requieren opciones contiguas, sin blancos.
+    for index, option in enumerate(account_options):
+        rows[index+1][6] = option
+    for index, name in enumerate(model_names):
+        rows[index+1][7] = name
+    for index, values in enumerate(rankings):
+        rows[index+1][8:11] = list(values)
+    for index, values in enumerate(coverage):
+        rows[index+1][11:14] = list(values)
+    return rows, account_options, model_names
+
+
 def dashboard(write: bool = False, model: str | None = None,
               year: int | None = None, month: int | None = None):
     if (year is None) != (month is None):
@@ -254,30 +310,54 @@ def dashboard(write: bool = False, model: str | None = None,
     settings = get_ml_settings()
     sheets = SheetsService(settings.google_client_secret_file, settings.google_token_file,
                            settings.spreadsheet_id)
-    forecasts, selected = select_forecasts(
-        sheets.get_rows(settings.sheet_predictions_account), model, year, month)
+    active = sheets.get_rows(settings.sheet_predictions_account, unformatted=True)
+    historical = (
+        sheets.get_rows("Historial_Predicciones", unformatted=True)
+        if "Historial_Predicciones" in sheets.sheet_names() else [])
+    all_forecasts = active + historical
+    # Periodo predeterminado tomado de la hoja ACTIVA, no de una versión antigua.
+    active_forecasts, active_selected = select_forecasts(active, None, year, month)
+    year, month = active_selected[:2]
+    model_frames = {}
+    for name in sorted({str(row.get("Modelo", "")) for row in all_forecasts
+                        if row.get("Modelo")}):
+        try:
+            frame, _ = select_forecasts(
+                all_forecasts, name, year, month)
+            model_frames[name] = frame
+        except RuntimeError:
+            continue
+    if not model_frames:
+        raise RuntimeError("No hay predicciones actuales ni históricas para graficar")
+    # El usuario elige por desplegable F4. La CLI --modelo anula esa selección.
     sheet_id = 0
+    current_account, preferred_model = None, None
     if write:
         sheets.ensure_sheet(DASHBOARD_SHEET)
         sheet_id, _ = sheets.sheet_chart_info(DASHBOARD_SHEET)
-    current_account = None
-    if write:
-        # Mantener la elección manual al volver a publicar.
         prev = sheets.api.spreadsheets().values().get(
             spreadsheetId=sheets.spreadsheet_id,
-            range=f"'{DASHBOARD_SHEET}'!B4").execute().get("values", [])
+            range=f"'{DASHBOARD_SHEET}'!A4:F4").execute().get("values", [])
         if prev and prev[0]:
-            current_account = str(prev[0][0]).strip()
+            current_account = str(prev[0][1]).strip() if len(prev[0]) > 1 else None
+            preferred_model = str(prev[0][5]).strip() if len(prev[0]) > 5 else None
+    selected_model = (model or (
+        preferred_model if preferred_model in model_frames else active_selected[2]))
+    if selected_model not in model_frames:
+        raise RuntimeError(f"Modelo no disponible para {year}-{month:02d}: {selected_model}")
+    forecasts = model_frames[selected_model]
+    selected = (year, month, selected_model)
     values, charts, summary = build_dashboard(history, forecasts, selected,
                                               sheet_id, current_account)
-    source_rows = build_account_sources(history, forecasts, selected) if write else None
+    source_rows, all_accounts, all_models = build_multimodel_sources(
+        history, model_frames, (year, month)) if write else (None, [], [])
     print(f"Dashboard {summary['periodo']} | modelo={summary['modelo']} | "
           f"cuentas={summary['cuentas']} | destacada={summary['cuenta_destacada']}")
     print(f"Vista previa: {len(values)-5} filas de datos y {len(charts)} gráficos nativos.")
     if write:
         result = sheets.replace_dashboard(
             DASHBOARD_SHEET, values, charts, account_data_rows=source_rows,
-            accounts=sorted(forecasts["Cuenta"].astype(str).unique()),
+            accounts=all_accounts, models=all_models,
             account_sheet_name=ACCOUNT_DATA_SHEET)
         print(f"Google Sheets actualizado: {DASHBOARD_SHEET} | "
               f"{result['charts']} gráficos | {result['rows']} filas")

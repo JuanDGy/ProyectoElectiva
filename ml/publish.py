@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import argparse
 from datetime import date
+import hashlib
+import json
 from pathlib import Path
 
 import joblib
@@ -102,20 +104,45 @@ def new_rows(predictions: pd.DataFrame, existing: list[dict]) -> pd.DataFrame:
     return predictions.loc[[index not in seen for index in keep]].reset_index(drop=True)
 
 
-def publish(year: int | None = None, month: int | None = None, model_path=None, write: bool = False):
+def resolve_model(model_path):
+    """auto = ganador por validación, champion = modelo validado y promovido."""
+    if str(model_path) == "auto":
+        selection = Path("models/auto_selection.json")
+        if not selection.exists():
+            raise RuntimeError(
+                "Sin selección automática. Ejecuta: uv run python cli.py entrenar --modelos all")
+        info = json.loads(selection.read_text(encoding="utf-8"))
+        resolved = Path(info["selected_model_path"])
+        return resolved, info["status"]
+    if str(model_path) == "champion" or model_path is None:
+        result = champion_model_path()
+        return result, "Champion" if result else "Sin Champion"
+    return Path(model_path), "Experimental (selección manual)"
+
+
+def publish(year: int | None = None, month: int | None = None,
+            model_path=None, write: bool = False, synchronize: bool = False):
+    if synchronize and not write:
+        raise ValueError("--sincronizar necesita --publicar para evitar cambios ambiguos")
     snapshot = latest_snapshot()
     if not snapshot:
         raise RuntimeError("Sin snapshot local. Ejecuta ml.snapshot antes de publicar.")
     history = pd.read_csv(snapshot["file"], dtype=str, keep_default_na=False)
 
-    resolved = Path(model_path) if model_path else champion_model_path()
+    resolved, model_state = resolve_model(model_path)
     if resolved is None or not resolved.exists():
         raise RuntimeError("Sin modelo validado. Indica --model-path o promueve uno elegible.")
 
     if year is None or month is None:
         year, month = default_target(history)
 
-    predictions, summary = build_predictions(history, joblib.load(resolved), model_id(resolved), year, month)
+    identifier = model_id(resolved)
+    if model_state == "Champion" and str(model_path or "champion") == "champion":
+        from ml.registry import get_champion
+        entry = get_champion()
+        if entry:
+            identifier = entry["id"]  # modelo real, no alias ambiguo "champion"
+    predictions, summary = build_predictions(history, joblib.load(resolved), identifier, year, month)
     print(f"Pronóstico {year}-{month:02d} | modelo={resolved}")
     print(" | ".join(f"{key}={value}" for key, value in summary.items()))
     if predictions.empty:
@@ -126,13 +153,25 @@ def publish(year: int | None = None, month: int | None = None, model_path=None, 
     if write:
         settings = get_ml_settings()
         sheets = SheetsService(settings.google_client_secret_file, settings.google_token_file, settings.spreadsheet_id)
-        created = sheets.ensure_sheet(settings.sheet_predictions_account)
-        existing = sheets.get_rows(settings.sheet_predictions_account)
-        fresh = new_rows(predictions, existing)
-        sheets.append_rows(settings.sheet_predictions_account, fresh.values.tolist(), headers=HEADERS)
-        action = "creada" if created else "actualizada"
-        print(f"Hoja '{settings.sheet_predictions_account}' {action}: {len(fresh)} filas nuevas, "
-              f"{len(predictions) - len(fresh)} ya presentes.")
+        if synchronize:
+            from ml.prediction_sync import sync_predictions
+            path = Path(snapshot["file"])
+            checksum = hashlib.sha256(path.read_bytes()).hexdigest()
+            report = sync_predictions(sheets, settings.sheet_predictions_account,
+                                      predictions, checksum, model_state)
+            print(f"Sincronización {settings.sheet_predictions_account}: "
+                  f"{report['updates']} actualizadas, {report['adds']} nuevas, "
+                  f"{report['archive']} versiones archivadas, "
+                  f"{report['unchanged']} sin cambios.")
+            print("Histórico de versiones: Historial_Predicciones.")
+        else:
+            created = sheets.ensure_sheet(settings.sheet_predictions_account)
+            existing = sheets.get_rows(settings.sheet_predictions_account, unformatted=True)
+            fresh = new_rows(predictions, existing)
+            sheets.append_rows(settings.sheet_predictions_account, fresh.values.tolist(), headers=HEADERS)
+            action = "creada" if created else "actualizada"
+            print(f"Hoja '{settings.sheet_predictions_account}' {action}: {len(fresh)} filas nuevas, "
+                  f"{len(predictions) - len(fresh)} ya presentes.")
     else:
         print("Modo lectura: agrega --write para publicar en la hoja.")
     return predictions, summary
@@ -143,11 +182,12 @@ def main() -> int:
     parser.add_argument("--year", type=int)
     parser.add_argument("--month", type=int)
     parser.add_argument("--model-path")
-    parser.add_argument("--write", action="store_true", help="Agregar las filas a Predicciones_Cuenta")
+    parser.add_argument("--write", action="store_true", help="Publicar en Predicciones_Cuenta")
+    parser.add_argument("--sync", action="store_true", help="Sobrescribir vigentes por cuenta/periodo y guardar historial")
     args = parser.parse_args()
     if (args.year is None) != (args.month is None):
         parser.error("Indica --year y --month juntos, o ninguno para usar el mes siguiente")
-    publish(args.year, args.month, args.model_path, args.write)
+    publish(args.year, args.month, args.model_path, args.write, args.sync)
     return 0
 
 

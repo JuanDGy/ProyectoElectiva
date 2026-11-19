@@ -181,3 +181,24 @@ uv run python cli.py comparativas --publicar
 
 Ver [COMPARATIVAS_SHEETS.md](COMPARATIVAS_SHEETS.md) para fuentes,
 métricas, criterios de comparación y limitaciones metodológicas.
+
+
+## Entrenamiento automático de 13 familias (19/11/2026)
+
+La extensión ml.train_auto entrena y registra una configuración por familia
+según el mínimo MAE de validación. Se guardan modelos joblib operativos y un
+selector en models/auto_selection.json. No se publica un Champion si el
+ganador no supera las referencias en el test y el criterio bootstrap.
+
+    uv run python cli.py entrenar --modelos all
+    uv run python cli.py predicciones --modelo auto --publicar --sincronizar
+    uv run python cli.py graficos --publicar
+
+Predicciones_Cuenta contiene estimaciones vigentes con snapshot y estado del
+modelo. Historial_Predicciones conserva versiones anteriores. Graficos_Predicciones
+tiene selectores dinámicos B4 (cuenta) y F4 (modelo), y cambia sus tres gráficos
+sin intervención de Python. El reporte de test corresponde al ajuste experimental
+previo al reentrenamiento operativo con el histórico completo.
+
+Consultar la [guía de entrenamiento automático y recuperación](
+ENTRENAMIENTO_AUTOMATICO_Y_SINCRONIZACION.md).

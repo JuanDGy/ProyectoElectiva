@@ -7,6 +7,7 @@ No modifica modelos, registro ni hojas: solo escribe reports/.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 from datetime import datetime
 from pathlib import Path
@@ -207,7 +208,10 @@ def main(argv=None) -> int:
         entry['operational'] = {**regression_metrics(truth, pred), 'n_extra': int(len(extra_ref)),
                                 'coverage_pct': 100 * len(truth) / observed_test}
 
-    output = {'generated_at': datetime.now().isoformat(timespec='seconds'), 'source': str(source),
+    output = {'generated_at': datetime.now().isoformat(timespec='seconds'),
+              'source': str(source),
+              'source_sha256': hashlib.sha256(source.read_bytes()).hexdigest(),
+              'test_start': args.test_start, 'test_end': args.test_end,
               'test_rows': len(test_ref), 'validation_periods': [p.strftime('%Y-%m') for p in validation],
               'baselines': baselines, 'eligibility_floor_mae': floor,
               'results': sorted(results, key=lambda r: r['test']['mae'])}

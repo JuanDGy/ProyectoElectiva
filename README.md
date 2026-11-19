@@ -389,3 +389,42 @@ histórico**, no los resultados de las 45 predicciones ni los gráficos
 comparativos de las otras cuentas. La lista se actualiza al publicar otro
 periodo o modelo. La hoja técnica Datos_Graficos_Cuenta es un origen
 administrado por el programa y no debe editarse a mano.
+
+
+## Entrenamiento automático y sincronización por cuenta (2026)
+
+La competencia experimental evalúa 13 familias. Para guardar **una
+configuración ejecutable por familia**, elegir el menor MAE **de validación**
+y registrar el resultado sin promover indebidamente un modelo:
+
+    uv run python cli.py competencia
+    uv run python cli.py entrenar --modelos all --seleccion automatica
+
+No se promueve Champion si la opción ganadora no demuestra mejora frente a
+persistencia y media móvil en el test, y estabilidad según el bootstrap.
+
+Para publicar el modelo elegido por validación, reemplazando cuentas del mismo
+periodo y archivando sus versiones anteriores:
+
+    uv run python cli.py predicciones --modelo auto --anio 2026 --mes 2 --publicar --sincronizar
+
+La hoja Predicciones_Cuenta conserva los resultados vigentes; las versiones
+reemplazadas se archivan en Historial_Predicciones. El historial se escribe
+**antes** del reemplazo. Las cuentas nuevas se añaden sin duplicados.
+
+Para consultar o actualizar los tres gráficos:
+
+    uv run python cli.py graficos --publicar
+
+En Graficos_Predicciones, **B4** cambia la cuenta y **F4** cambia el modelo
+vigente o histórico; los tres gráficos reaccionan directamente en Sheets.
+El dashboard no interpreta los datos faltantes como consumo cero.
+
+Estado de la corrida del 19/11/2026: 13 familias entrenadas, SVR radial
+(delta) seleccionado por validación, **sin promoción Champion** porque su MAE
+de test (463,05 kWh) no supera la persistencia (448,24 kWh). Se publicaron
+49 predicciones de febrero 2026, 45 sobreescritas y 4 nuevas, conservando las
+45 versiones anteriores de Random Forest. Este es un ejercicio retrospectivo.
+
+Guía completa y recuperación: [Entrenamiento automático y sincronización
+versionada](docs/ENTRENAMIENTO_AUTOMATICO_Y_SINCRONIZACION.md).

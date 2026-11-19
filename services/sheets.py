@@ -22,11 +22,14 @@ class SheetsService:
         self.api = build("sheets", "v4", credentials=creds, cache_discovery=False)
         self.spreadsheet_id = spreadsheet_id
 
-    def get_rows(self, sheet_name: str) -> list[dict]:
-        result = self.api.spreadsheets().values().get(
-            spreadsheetId=self.spreadsheet_id,
-            range=f"'{sheet_name}'",
-        ).execute()
+    def get_rows(self, sheet_name: str, *, unformatted: bool = False) -> list[dict]:
+        kwargs = {"spreadsheetId": self.spreadsheet_id,
+                  "range": f"'{sheet_name}'"}
+        if unformatted:
+            # Es fundamental para no leer "499,409 kWh" como un string;
+            # Google Sheets conserva 499.409 como valor real de celda.
+            kwargs["valueRenderOption"] = "UNFORMATTED_VALUE"
+        result = self.api.spreadsheets().values().get(**kwargs).execute()
         values = result.get("values", [])
         if not values:
             return []
@@ -101,6 +104,7 @@ class SheetsService:
     def replace_dashboard(self, sheet_name: str, rows: list[list], charts: list[dict],
                           *, account_data_rows: list[list] | None = None,
                           accounts: list[str] | None = None,
+                          models: list[str] | None = None,
                           account_sheet_name: str = "Datos_Graficos_Cuenta") -> dict:
         """Sincroniza la pestaña reservada a gráficos nativos, sin duplicarlos.
 
@@ -117,34 +121,85 @@ class SheetsService:
         ).execute()
         if account_data_rows is not None:
             if not accounts or sheet_name != "Graficos_Predicciones":
-                raise ValueError("La selección de cuenta solo está permitida en Graficos_Predicciones")
+                raise ValueError("La selección está reservada a Graficos_Predicciones")
             if account_sheet_name != "Datos_Graficos_Cuenta":
                 raise ValueError("Nombre de hoja auxiliar no permitido")
             self.ensure_sheet(account_sheet_name)
             self.api.spreadsheets().values().clear(
                 spreadsheetId=self.spreadsheet_id,
-                range=f"'{account_sheet_name}'!A:F", body={},
+                range=f"'{account_sheet_name}'!A:N" if models
+                      else f"'{account_sheet_name}'!A:F", body={},
             ).execute()
             self.api.spreadsheets().values().update(
                 spreadsheetId=self.spreadsheet_id,
                 range=f"'{account_sheet_name}'!A1", valueInputOption="RAW",
                 body={"values": account_data_rows},
             ).execute()
-            # es_ES utiliza ; como separador entre argumentos.
-            # SIN_DATO evita confundir meses sin factura con consumo cero.
-            lookup = f"'{account_sheet_name}'!$A$2:$E$" + str(len(account_data_rows))
+            total = len(account_data_rows)
             formulas = []
-            for row_index in range(6, 15):
-                key = f'$B$4&"|"&$A{row_index}'
-                def formula(column):
-                    call = f"VLOOKUP({key};{lookup};{column};FALSE)"
-                    return f'=IFERROR(IF({call}="SIN_DATO";"";{call});"")'
-                formulas.append([formula(4), formula(5)])
+            if models:
+                lookup = f"'{account_sheet_name}'!$A$2:$F$" + str(total)
+                for row_number in range(6, 15):
+                    key = f'$F$4&"|"&$B$4&"|"&$A{row_number}'
+                    def lookup_line(column):
+                        call = f"VLOOKUP({key};{lookup};{column};FALSE)"
+                        return f'=IFERROR(IF({call}="SIN_DATO";"";{call});"")'
+                    formulas.append([lookup_line(5), lookup_line(6)])
+            else:
+                lookup = f"'{account_sheet_name}'!$A$2:$E$" + str(total)
+                for row_number in range(6, 15):
+                    key = f'$B$4&"|"&$A{row_number}'
+                    def lookup_line(column):
+                        call = f"VLOOKUP({key};{lookup};{column};FALSE)"
+                        return f'=IFERROR(IF({call}="SIN_DATO";"";{call});"")'
+                    formulas.append([lookup_line(4), lookup_line(5)])
             self.api.spreadsheets().values().update(
                 spreadsheetId=self.spreadsheet_id,
                 range=f"'{sheet_name}'!B6:C14", valueInputOption="USER_ENTERED",
                 body={"values": formulas},
             ).execute()
+            if models:
+                ranked = f"'{account_sheet_name}'!$I$2:$K$" + str(total)
+                covered = f"'{account_sheet_name}'!$L$2:$N$" + str(total)
+                ranking_formulas = []
+                for row_number in range(6, 21):
+                    key = f'$F$4&"|"&(ROW()-5)'
+                    ranking_formulas.append([
+                        f'=IFERROR(VLOOKUP({key};{ranked};2;FALSE);"")',
+                        f'=IFERROR(VLOOKUP({key};{ranked};3;FALSE);"")',
+                    ])
+                self.api.spreadsheets().values().update(
+                    spreadsheetId=self.spreadsheet_id,
+                    range=f"'{sheet_name}'!E6:F20",
+                    valueInputOption="USER_ENTERED",
+                    body={"values": ranking_formulas},
+                ).execute()
+                coverage_formulas = []
+                for row_number in range(6, 15):
+                    key = f'$F$4&"|"&$H{row_number}'
+                    def lookup_coverage(column):
+                        call = f"VLOOKUP({key};{covered};{column};FALSE)"
+                        return f'=IFERROR(IF({call}="SIN_DATO";"";{call});"")'
+                    coverage_formulas.append([
+                        lookup_coverage(2), lookup_coverage(3),
+                    ])
+                self.api.spreadsheets().values().update(
+                    spreadsheetId=self.spreadsheet_id,
+                    range=f"'{sheet_name}'!I6:J14",
+                    valueInputOption="USER_ENTERED",
+                    body={"values": coverage_formulas},
+                ).execute()
+                # El resumen también responde al selector F4, no queda
+                # etiquetado falsamente con el primer modelo publicado.
+                self.api.spreadsheets().values().update(
+                    spreadsheetId=self.spreadsheet_id,
+                    range=f"'{sheet_name}'!A2",
+                    valueInputOption="USER_ENTERED",
+                    body={"values": [[
+                        '="Periodo estimado: "&$H$14&" | Modelo seleccionado: "&'
+                        '$F$4&" | Cuentas con predicción: "&$J$14'
+                    ]]},
+                ).execute()
         requests = [
             {"updateSheetProperties": {"properties": {
                 "sheetId": sheet_id, "gridProperties": {"frozenRowCount": 4}},
@@ -184,13 +239,47 @@ class SheetsService:
                     "rule": {
                         "condition": {"type": "ONE_OF_RANGE", "values": [{
                             "userEnteredValue":
-                                f"='{account_sheet_name}'!$F$2:$F$" + str(len(accounts) + 1),
+                                f"='{account_sheet_name}'!$" +
+                                ("G" if models else "F") + "$2:$" +
+                                ("G" if models else "F") + "$" + str(len(accounts) + 1),
                         }]},
                         "showCustomUi": True, "strict": True,
                         "inputMessage": "Escoge una de las cuentas con predicción.",
                     },
                 }},
             ])
+            if models:
+                requests.extend([
+                    {"repeatCell": {
+                        "range": {"sheetId": sheet_id,
+                                  "startRowIndex": 3, "endRowIndex": 4,
+                                  "startColumnIndex": 5, "endColumnIndex": 6},
+                        "cell": {"userEnteredFormat": {
+                            "numberFormat": {"type": "TEXT"},
+                            "backgroundColor": {"red": .86, "green": .94, "blue": 1},
+                            "textFormat": {"bold": True, "fontSize": 11},
+                        }},
+                        "fields": "userEnteredFormat",
+                    }},
+                    {"setDataValidation": {
+                        "range": {"sheetId": sheet_id,
+                                  "startRowIndex": 3, "endRowIndex": 4,
+                                  "startColumnIndex": 5, "endColumnIndex": 6},
+                        "rule": {"condition": {"type": "ONE_OF_RANGE", "values": [{
+                            "userEnteredValue":
+                                f"='{account_sheet_name}'!$H$2:$H$" + str(len(models) + 1),
+                        }]},
+                        "showCustomUi": True, "strict": True,
+                        "inputMessage": "Escoge un modelo vigente o histórico.",
+                        },
+                    }},
+                    {"updateDimensionProperties": {
+                        "range": {"sheetId": sheet_id, "dimension": "COLUMNS",
+                                  "startIndex": 5, "endIndex": 6},
+                        "properties": {"pixelSize": 300},
+                        "fields": "pixelSize",
+                    }},
+                ])
         desired = {item["spec"]["title"] for item in charts}
         for title, chart_id in existing.items():
             if title.startswith("EcoData |") and title not in desired:
@@ -482,6 +571,202 @@ class SheetsService:
             spreadsheetId=self.spreadsheet_id, body={"requests": requests},
         ).execute()
         return {"sheet_id": sheet_id, "rows": len(rows), "charts": len(charts)}
+
+    def format_predictions_sheet(self, sheet_name: str, headers: list[str]) -> None:
+        """Estiliza la tabla vigente sin alterar facturas ni gráficos existentes."""
+        if sheet_name != "Predicciones_Cuenta":
+            raise ValueError("Formato permitido solo en Predicciones_Cuenta")
+        sheet_id, _ = self.sheet_chart_info(sheet_name)
+        items = self.get_rows(sheet_name, unformatted=True)
+        n_rows = len(items) + 1
+        dark = {"red": .11, "green": .21, "blue": .34}
+        white = {"red": 1, "green": 1, "blue": 1}
+        light = {"red": .95, "green": .97, "blue": .99}
+        amber = {"red": 1, "green": .96, "blue": .86}
+        green = {"red": .92, "green": .98, "blue": .93}
+        requests = [
+            {"updateSheetProperties": {
+                "properties": {"sheetId": sheet_id,
+                               "gridProperties": {"frozenRowCount": 1,
+                                                  "frozenColumnCount": 3}},
+                "fields": "gridProperties.frozenRowCount,gridProperties.frozenColumnCount",
+            }},
+            {"repeatCell": {
+                "range": {"sheetId": sheet_id, "startRowIndex": 0,
+                          "endRowIndex": 1, "startColumnIndex": 0,
+                          "endColumnIndex": len(headers)},
+                "cell": {"userEnteredFormat": {
+                    "backgroundColor": dark,
+                    "textFormat": {"bold": True, "foregroundColor": white},
+                    "wrapStrategy": "WRAP", "verticalAlignment": "MIDDLE"}},
+                "fields": "userEnteredFormat",
+            }},
+            {"updateDimensionProperties": {
+                "range": {"sheetId": sheet_id, "dimension": "ROWS",
+                          "startIndex": 0, "endIndex": 1},
+                "properties": {"pixelSize": 50}, "fields": "pixelSize",
+            }},
+        ]
+        widths = [145, 280, 145, 75, 75, 180, 310, 145, 105, 330, 185]
+        for col, width in enumerate(widths):
+            requests.append({"updateDimensionProperties": {
+                "range": {"sheetId": sheet_id, "dimension": "COLUMNS",
+                          "startIndex": col, "endIndex": col + 1},
+                "properties": {"pixelSize": width}, "fields": "pixelSize",
+            }})
+        if n_rows > 1:
+            requests.append({"setBasicFilter": {"filter": {
+                "range": {"sheetId": sheet_id, "startRowIndex": 0,
+                          "endRowIndex": n_rows,
+                          "startColumnIndex": 0,
+                          "endColumnIndex": len(headers)}}}})
+            for idx, item in enumerate(items, start=1):
+                raw_age = item.get("Antigüedad (meses)", "")
+                try:
+                    age = int(float(str(raw_age).replace(",", ".")))
+                except ValueError:
+                    age = None
+                background = (amber if age is not None and age >= 3 else
+                              green if age == 1 else light if idx % 2 == 0
+                              else white)
+                requests.append({"repeatCell": {
+                    "range": {"sheetId": sheet_id, "startRowIndex": idx,
+                              "endRowIndex": idx+1, "startColumnIndex": 0,
+                              "endColumnIndex": len(headers)},
+                    "cell": {"userEnteredFormat": {"backgroundColor": background}},
+                    "fields": "userEnteredFormat.backgroundColor",
+                }})
+        requests.extend([
+            {"repeatCell": {
+                "range": {"sheetId": sheet_id, "startColumnIndex": 2,
+                          "endColumnIndex": 3},
+                "cell": {"userEnteredFormat": {
+                    "numberFormat": {"type": "TEXT"}}},
+                "fields": "userEnteredFormat.numberFormat",
+            }},
+            {"repeatCell": {
+                "range": {"sheetId": sheet_id, "startColumnIndex": 5,
+                          "endColumnIndex": 6, "startRowIndex": 1},
+                "cell": {"userEnteredFormat": {
+                    "numberFormat": {"type": "NUMBER", "pattern": '#,##0.000 "kWh"'}}},
+                "fields": "userEnteredFormat.numberFormat",
+            }},
+            {"updateCells": {
+                "start": {"sheetId": sheet_id, "rowIndex": 0, "columnIndex": 0},
+                "rows": [{"values": [{"note": note} for note in [
+                    "Fecha en que se generó esta versión del pronóstico.",
+                    "Sede asociada a la cuenta; no es un total institucional.",
+                    "Identificador de la cuenta, almacenado como texto para conservar ceros iniciales.",
+                    "Año correspondiente al consumo pronosticado.",
+                    "Mes correspondiente al consumo pronosticado.",
+                    "Consumo estimado en kWh. No constituye lectura real de medidor.",
+                    "Identificador del modelo entrenado que generó la fila.",
+                    "Meses entre la última observación disponible y la fecha objetivo.",
+                    "Política para usar datos faltantes (causal o estricta).",
+                    "Huella SHA-256 del histórico local utilizado en la versión.",
+                    "Estado del modelo: Champion validado o candidato experimental.",
+                ]]}],
+                "fields": "note",
+            }},
+        ])
+        self.api.spreadsheets().batchUpdate(
+            spreadsheetId=self.spreadsheet_id, body={"requests": requests},
+        ).execute()
+
+        # Panel lateral no cambia el contrato tabular de A:K.
+        periods = sorted({f"{r.get('Año')}-{str(r.get('Mes','')).zfill(2)}"
+                          for r in items if r.get("Año") and r.get("Mes")})
+        models = sorted({str(r.get("Modelo", "")) for r in items if r.get("Modelo")})
+        choices = [
+            ["EcoData ECCI | Predicciones vigentes", ""],
+            ["Cuentas / periodos registrados", len(items)],
+            ["Periodo(s) predicho(s)", ", ".join(periods[-5:])],
+            ["Modelo(s) vigente(s)", ", ".join(models[-3:])],
+            ["Nota metodológica", "Una estimación no equivale a consumo real."],
+            ["Estado", "Revisar columna Estado modelo; no hay champion si la validación no lo autoriza."],
+            ["Leyenda", "Amarillo: datos con >=3 meses de antigüedad. Verde: 1 mes."],
+        ]
+        self.api.spreadsheets().values().update(
+            spreadsheetId=self.spreadsheet_id,
+            range=f"'{sheet_name}'!M2:N8", valueInputOption="RAW",
+            body={"values": choices},
+        ).execute()
+        self.api.spreadsheets().batchUpdate(
+            spreadsheetId=self.spreadsheet_id,
+            body={"requests": [
+                {"updateDimensionProperties": {
+                    "range": {"sheetId": sheet_id, "dimension": "COLUMNS",
+                              "startIndex": 12, "endIndex": 13},
+                    "properties": {"pixelSize": 245}, "fields": "pixelSize"}},
+                {"updateDimensionProperties": {
+                    "range": {"sheetId": sheet_id, "dimension": "COLUMNS",
+                              "startIndex": 13, "endIndex": 14},
+                    "properties": {"pixelSize": 385}, "fields": "pixelSize"}},
+                {"repeatCell": {
+                    "range": {"sheetId": sheet_id, "startRowIndex": 1,
+                              "endRowIndex": 8, "startColumnIndex": 12,
+                              "endColumnIndex": 13},
+                    "cell": {"userEnteredFormat": {
+                        "backgroundColor": dark,
+                        "textFormat": {"bold": True, "foregroundColor": white},
+                        "wrapStrategy": "WRAP"}},
+                    "fields": "userEnteredFormat",
+                }},
+            ]},
+        ).execute()
+
+    def format_predictions_history(self, sheet_name: str = "Historial_Predicciones") -> None:
+        """Formato básico de una bitácora append-only; no reescribe su contenido."""
+        if sheet_name != "Historial_Predicciones":
+            raise ValueError("Bitácora reservada")
+        sheet_id, _ = self.sheet_chart_info(sheet_name)
+        rows = self.get_rows(sheet_name, unformatted=True)
+        requests = [
+            {"updateSheetProperties": {
+                "properties": {"sheetId": sheet_id, "gridProperties": {
+                    "frozenRowCount": 1, "frozenColumnCount": 3}},
+                "fields": "gridProperties.frozenRowCount,gridProperties.frozenColumnCount",
+            }},
+            {"repeatCell": {
+                "range": {"sheetId": sheet_id, "startRowIndex": 0,
+                          "endRowIndex": 1, "startColumnIndex": 0,
+                          "endColumnIndex": 14},
+                "cell": {"userEnteredFormat": {
+                    "backgroundColor": {"red": .11, "green": .21, "blue": .34},
+                    "textFormat": {"bold": True, "foregroundColor": {
+                        "red": 1, "green": 1, "blue": 1}},
+                    "wrapStrategy": "WRAP"}},
+                "fields": "userEnteredFormat",
+            }},
+            {"updateDimensionProperties": {
+                "range": {"sheetId": sheet_id, "dimension": "ROWS",
+                          "startIndex": 0, "endIndex": 1},
+                "properties": {"pixelSize": 55}, "fields": "pixelSize",
+            }},
+        ]
+        widths = [145, 275, 145, 75, 75, 175, 310, 150,
+                  105, 320, 205, 190, 380, 330]
+        for col, width in enumerate(widths):
+            requests.append({"updateDimensionProperties": {
+                "range": {"sheetId": sheet_id, "dimension": "COLUMNS",
+                          "startIndex": col, "endIndex": col + 1},
+                "properties": {"pixelSize": width}, "fields": "pixelSize",
+            }})
+        if rows:
+            requests.append({"setBasicFilter": {"filter": {
+                "range": {"sheetId": sheet_id, "startRowIndex": 0,
+                          "endRowIndex": len(rows)+1,
+                          "startColumnIndex": 0, "endColumnIndex": 14}}}})
+        requests.append({"repeatCell": {
+            "range": {"sheetId": sheet_id, "startColumnIndex": 2,
+                      "endColumnIndex": 3},
+            "cell": {"userEnteredFormat": {
+                "numberFormat": {"type": "TEXT"}}},
+            "fields": "userEnteredFormat.numberFormat",
+        }})
+        self.api.spreadsheets().batchUpdate(
+            spreadsheetId=self.spreadsheet_id, body={"requests": requests},
+        ).execute()
 
     def append_rows(self, sheet_name: str, rows: Iterable[Iterable], headers: list[str] | None = None) -> dict:
         """Inserta varias filas en una sola llamada; no escribe si no hay filas."""
