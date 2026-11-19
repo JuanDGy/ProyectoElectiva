@@ -89,3 +89,65 @@ def test_numeric_zero_forecast_not_discarded():
     ])
     assert len(frame)==1
     assert frame.iloc[0]['Consumo predicho (kWh)']==0.0
+
+
+def test_dashboard_refresh_uses_current_model_not_old_model_dropdown(tmp_path, monkeypatch):
+    # Contrato: refrescar los gráficos no debe quedarse con el modelo viejo de F4.
+    from types import SimpleNamespace
+    import ml.sheets_dashboard as module
+
+    history, forecasts, _ = fixtures()
+    csv_path = tmp_path / "historico.csv"
+    history.to_csv(csv_path, index=False)
+
+    def data(model, quantity):
+        rows = []
+        for i, account in enumerate(("01234", "05678")[:quantity]):
+            rows.append({
+                "Cuenta": account, "Año": 2026, "Mes": 2,
+                "Modelo": model, "Consumo predicho (kWh)": 150 + i,
+            })
+        return rows
+
+    class Request:
+        def execute(self):
+            return {"values": [["01234"]]}
+
+    class Api:
+        def spreadsheets(self):
+            return self
+        def values(self):
+            return self
+        def get(self, **kwargs):
+            return Request()
+
+    class FakeSheets:
+        published = None
+        def __init__(self, *_):
+            self.api = Api()
+            self.spreadsheet_id = "sheet-test"
+        def get_rows(self, name, **kwargs):
+            return (data("vigente", 2) if name == "Predicciones_Cuenta"
+                    else data("antiguo", 1))
+        def sheet_names(self):
+            return ["Predicciones_Cuenta", "Historial_Predicciones"]
+        def ensure_sheet(self, name):
+            return None
+        def sheet_chart_info(self, name):
+            return 99, {}
+        def replace_dashboard(self, name, values, charts, **kwargs):
+            FakeSheets.published = (values, charts, kwargs)
+            return {"charts": len(charts), "rows": len(values)}
+
+    monkeypatch.setattr(module, "SheetsService", FakeSheets)
+    monkeypatch.setattr(module, "get_ml_settings", lambda: SimpleNamespace(
+        google_client_secret_file="dummy", google_token_file="dummy",
+        spreadsheet_id="sheet-test", sheet_predictions_account="Predicciones_Cuenta"))
+    monkeypatch.setattr(module, "latest_snapshot", lambda: {"file": str(csv_path)})
+    module.dashboard(write=True)
+
+    values, charts, options = FakeSheets.published
+    assert "Modelo: vigente" in values[1][0]
+    assert values[3][5] == "vigente"
+    assert len(options["models"]) == 2
+    assert len(options["accounts"]) == 2

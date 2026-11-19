@@ -428,3 +428,19 @@ de test (463,05 kWh) no supera la persistencia (448,24 kWh). Se publicaron
 
 Guía completa y recuperación: [Entrenamiento automático y sincronización
 versionada](docs/ENTRENAMIENTO_AUTOMATICO_Y_SINCRONIZACION.md).
+
+
+### Actualizar directamente Predicciones_Cuenta
+
+    # Usar el último modelo seleccionado automáticamente y publicar en Sheets:
+    uv run python cli.py actualizar-predicciones --publicar
+
+    # Refrescar snapshot, competir, entrenar, publicar y actualizar gráficos:
+    uv run python cli.py actualizar-predicciones --completo --publicar
+
+Para consultar sin escribir omite --publicar. El comando completo exige
+tener los datos de BD_energia actualizados; no procesa PDFs por sí solo.
+La ejecución imprime cuántas cuentas se actualizaron, agregaron o quedaron
+idénticas. Si el histórico no cambió, es correcto obtener cero cambios.
+El dashboard se actualiza mostrando el modelo vigente, no el selector de
+modelo que estuviera activo en una visualización anterior.

@@ -331,18 +331,18 @@ def dashboard(write: bool = False, model: str | None = None,
         raise RuntimeError("No hay predicciones actuales ni históricas para graficar")
     # El usuario elige por desplegable F4. La CLI --modelo anula esa selección.
     sheet_id = 0
-    current_account, preferred_model = None, None
+    current_account = None
     if write:
         sheets.ensure_sheet(DASHBOARD_SHEET)
         sheet_id, _ = sheets.sheet_chart_info(DASHBOARD_SHEET)
         prev = sheets.api.spreadsheets().values().get(
             spreadsheetId=sheets.spreadsheet_id,
-            range=f"'{DASHBOARD_SHEET}'!A4:F4").execute().get("values", [])
+            range=f"'{DASHBOARD_SHEET}'!B4").execute().get("values", [])
         if prev and prev[0]:
-            current_account = str(prev[0][1]).strip() if len(prev[0]) > 1 else None
-            preferred_model = str(prev[0][5]).strip() if len(prev[0]) > 5 else None
-    selected_model = (model or (
-        preferred_model if preferred_model in model_frames else active_selected[2]))
+            current_account = str(prev[0][0]).strip()
+    # Al republicar SIEMPRE partir del modelo vigente de Predicciones_Cuenta,
+    # no de una selección antigua de F4. El usuario puede cambiar F4 después.
+    selected_model = model or active_selected[2]
     if selected_model not in model_frames:
         raise RuntimeError(f"Modelo no disponible para {year}-{month:02d}: {selected_model}")
     forecasts = model_frames[selected_model]

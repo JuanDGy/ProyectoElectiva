@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from datetime import datetime
 from typing import Iterable
 
 from googleapiclient.discovery import build
@@ -677,18 +678,29 @@ class SheetsService:
         periods = sorted({f"{r.get('Año')}-{str(r.get('Mes','')).zfill(2)}"
                           for r in items if r.get("Año") and r.get("Mes")})
         models = sorted({str(r.get("Modelo", "")) for r in items if r.get("Modelo")})
+        last_execution = max((str(item.get("Fecha ejecución") or "")
+                              for item in items), default="Sin predicciones")
+        snapshots = {str(item.get("Snapshot SHA-256", ""))
+                     for item in items if item.get("Snapshot SHA-256")}
+        states = sorted({str(item.get("Estado modelo", ""))
+                         for item in items if item.get("Estado modelo")})
         choices = [
             ["EcoData ECCI | Predicciones vigentes", ""],
-            ["Cuentas / periodos registrados", len(items)],
-            ["Periodo(s) predicho(s)", ", ".join(periods[-5:])],
-            ["Modelo(s) vigente(s)", ", ".join(models[-3:])],
-            ["Nota metodológica", "Una estimación no equivale a consumo real."],
-            ["Estado", "Revisar columna Estado modelo; no hay champion si la validación no lo autoriza."],
+            ["Cuentas con predicción", len(items)],
+            ["Periodo(s) estimado(s)", ", ".join(periods[-5:])],
+            ["Modelo(s) en la tabla", ", ".join(models[-3:])],
+            ["Última ejecución registrada", last_execution],
+            ["Snapshot del histórico (SHA-256)", ", ".join(x[:16] for x in sorted(snapshots))],
+            ["Estado del modelo", ", ".join(states)],
+            ["Nota metodológica", "Estimaciones experimentales; no son lecturas reales."],
+            ["Actualización", "uv run python cli.py actualizar-predicciones --publicar"],
+            ["Última verificación de Sheets (hora local)",
+             datetime.now().astimezone().isoformat(timespec="seconds")],
             ["Leyenda", "Amarillo: datos con >=3 meses de antigüedad. Verde: 1 mes."],
         ]
         self.api.spreadsheets().values().update(
             spreadsheetId=self.spreadsheet_id,
-            range=f"'{sheet_name}'!M2:N8", valueInputOption="RAW",
+            range=f"'{sheet_name}'!M2:N12", valueInputOption="RAW",
             body={"values": choices},
         ).execute()
         self.api.spreadsheets().batchUpdate(
@@ -704,7 +716,7 @@ class SheetsService:
                     "properties": {"pixelSize": 385}, "fields": "pixelSize"}},
                 {"repeatCell": {
                     "range": {"sheetId": sheet_id, "startRowIndex": 1,
-                              "endRowIndex": 8, "startColumnIndex": 12,
+                              "endRowIndex": 12, "startColumnIndex": 12,
                               "endColumnIndex": 13},
                     "cell": {"userEnteredFormat": {
                         "backgroundColor": dark,

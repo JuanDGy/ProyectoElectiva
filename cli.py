@@ -39,6 +39,16 @@ def setup():
     p = argparse.ArgumentParser(description="EcoData: facturas, Gemini, ML y dashboard de Sheets.")
     sub = p.add_subparsers(dest="command")
     sub.add_parser("estado", help="Resumen local sin usar Google")
+    refresh = sub.add_parser(
+        "actualizar-predicciones",
+        help="Publicar en Predicciones_Cuenta y actualizar sus gráficos, con flujo completo opcional")
+    refresh.add_argument("--completo", action="store_true",
+                         help="Actualizar snapshot, competencia y entrenamiento primero")
+    refresh.add_argument("--publicar", action="store_true",
+                         help="Sincronizar Predicciones_Cuenta y sus gráficos")
+    refresh.add_argument("--anio", type=int)
+    refresh.add_argument("--mes", type=int)
+    refresh.add_argument("--sin-graficos", action="store_true")
     process = sub.add_parser("procesar", help="Procesar facturas nuevas")
     process.add_argument("--limite", type=int, default=1)
     history = sub.add_parser("historico", help="Importar Drive recursivamente")
@@ -89,6 +99,16 @@ def dispatch(args, parser):
     cmd = args.command
     if cmd == "estado":
         return status()
+    if cmd == "actualizar-predicciones":
+        if (args.anio is None) != (args.mes is None):
+            parser.error("--anio y --mes deben indicarse juntos")
+        return invoke(
+            "ml.workflow",
+            *(["--completo"] if args.completo else []),
+            *(["--publicar"] if args.publicar else []),
+            *(["--anio", args.anio, "--mes", args.mes] if args.anio is not None else []),
+            *(["--sin-graficos"] if args.sin_graficos else []),
+        )
     if cmd == "entrenar":
         return invoke("ml.train_auto", "--modelos", args.modelos,
                       "--seleccion", args.seleccion,
@@ -160,17 +180,19 @@ def main(argv=None):
     if not argv and sys.stdin.isatty():
         options = {
             "1": ["estado"], "2": ["procesar"], "3": ["historico"],
-            "4": ["predicciones"], "5": ["graficos"],
+            "4": ["predicciones", "--modelo", "auto"], "5": ["graficos"],
             "6": ["competencia", "--modelos", "rbf,lstm,mlp,svr", "--enfoques", "level"],
             "7": ["comparar-ocr"], "8": ["pendientes", "revisar"],
             "9": ["comparativas"], "10": ["entrenar", "--modelos", "all"],
+            "11": ["actualizar-predicciones", "--publicar"],
         }
         print("\nEcoData ECCI — Menú")
         for k, label in zip(options, ["Estado", "Ingesta (1)", "Histórico (10)",
-                        "Predicciones (lectura)", "Gráficos Sheets (lectura)",
+                        "Predicciones auto (vista previa)", "Gráficos Sheets (lectura)",
                         "Competencia neuronal", "Comparación OCR/LLM",
                         "Revisión de pendientes", "Comparativas en Sheets (vista previa)",
-                        "Entrenar y seleccionar automáticamente"]):
+                        "Entrenar y seleccionar automáticamente",
+                        "Sincronizar Predicciones_Cuenta y gráficos"]):
             print(k + ". " + label)
         print("0. Salir")
         selection = input("Opción: ").strip()

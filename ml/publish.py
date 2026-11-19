@@ -130,11 +130,29 @@ def publish(year: int | None = None, month: int | None = None,
     history = pd.read_csv(snapshot["file"], dtype=str, keep_default_na=False)
 
     resolved, model_state = resolve_model(model_path)
+    if str(model_path) == "auto":
+        # El entrenamiento automático es específico del snapshot.
+        # No publicar inferencias con otro CSV sin revalidar y reentrenar.
+        selection = json.loads(Path("models/auto_selection.json").read_text(
+            encoding="utf-8"))
+        current_checksum = hashlib.sha256(Path(snapshot["file"]).read_bytes()).hexdigest()
+        if selection.get("snapshot_sha256") != current_checksum:
+            raise RuntimeError(
+                "El modelo automático pertenece a otro snapshot. "
+                "Ejecuta: uv run python cli.py actualizar-predicciones "
+                "--completo --publicar (o competencia + entrenar + predicciones).")
     if resolved is None or not resolved.exists():
         raise RuntimeError("Sin modelo validado. Indica --model-path o promueve uno elegible.")
 
-    if year is None or month is None:
+    inferred_target = year is None or month is None
+    if inferred_target:
         year, month = default_target(history)
+        print(f"Periodo escogido del histórico: {year}-{month:02d}. "
+              "Es el mes posterior al último consumo registrado, "
+              "NO necesariamente el mes próximo en el calendario.")
+    if (year, month) < (date.today().year, date.today().month):
+        print(f"AVISO: {year}-{month:02d} es un periodo pasado. "
+              "Estas son estimaciones retrospectivas, no pronósticos futuros.")
 
     identifier = model_id(resolved)
     if model_state == "Champion" and str(model_path or "champion") == "champion":

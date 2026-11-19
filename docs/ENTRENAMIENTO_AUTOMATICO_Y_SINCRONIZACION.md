@@ -103,3 +103,40 @@ El sistema comprueba que al cambiar de SVR a Random Forest el Top 15 y la cobert
     uv run python cli.py comparativas --publicar
 
 Los modelos y respaldos son locales y están fuera de Git. La selección experimental no implica superioridad respecto de persistencia. Los resultados y cambios de datos deben ser explicados con esa restricción en el informe académico.
+
+
+## Actualización operativa integrada (19/11/2026)
+
+Para actualizar la hoja Predicciones_Cuenta tras un entrenamiento ya ejecutado:
+
+    uv run python cli.py actualizar-predicciones --publicar
+
+Este comando usa el modelo auto registrado, verifica que su SHA-256 coincida
+con el snapshot vigente, sincroniza las filas en Predicciones_Cuenta y publica
+los tres gráficos. Las versiones anteriores quedan en Historial_Predicciones.
+
+Si quieres ejecutar el recorrido completo de ML con nuevas facturas ya
+registradas en BD_energia:
+
+    uv run python cli.py actualizar-predicciones --completo --publicar
+
+En ese orden: snapshot, competencia, reentrenamiento y selección automática,
+sincronización de Predicciones_Cuenta y actualización de los gráficos.
+Reevaluar y reentrenar es más costoso y crea archivos locales nuevos.
+
+Si no deseas escribir en Sheets, omite --publicar para ver la predicción.
+Si no especificas --anio/--mes, el periodo elegido es el mes que sigue al
+último consumo del histórico; puede ser retrospectivo. Para febrero de 2026:
+
+    uv run python cli.py actualizar-predicciones --anio 2026 --mes 2 --publicar
+
+Al republicar Graficos_Predicciones se selecciona por defecto el modelo
+VIGENTE de Predicciones_Cuenta, evitando que una elección antigua de F4 haga
+parecer que no se publicaron las predicciones recientes. El usuario puede
+volver a cambiar F4 después de refrescar.
+
+El resumen lateral M2:N12 de Predicciones_Cuenta distingue la última
+ejecución del modelo y la última verificación de Sheets, además de mostrar
+el identificador de modelo y SHA-256 del snapshot. Si la sincronización
+informa 0 actualizaciones y 0 inserciones, los valores eran idénticos:
+NO es un fallo. La verificación se registra aunque no cambien las cifras.
