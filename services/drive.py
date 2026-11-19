@@ -10,6 +10,9 @@ from googleapiclient.http import MediaIoBaseDownload
 from services.google_auth import get_credentials
 
 
+FOLDER_MIME = "application/vnd.google-apps.folder"
+
+
 class DriveService:
     def __init__(self, client_secret_file: str, token_file: str):
         creds = get_credentials(client_secret_file, token_file)
@@ -41,6 +44,37 @@ class DriveService:
                 if not page_token:
                     break
         return None
+
+    def iter_pdfs(self, folder_id: str):
+        """Recorre el árbol completo una sola vez y produce cada PDF del histórico.
+
+        Pagina, no sigue accesos directos y devuelve metadatos sin descargar. El
+        orden es determinista (carpeta, nombre, fecha) para poder reanudar.
+        """
+        pending = deque([folder_id])
+        visited = set()
+        while pending:
+            current = pending.popleft()
+            if current in visited:
+                continue
+            visited.add(current)
+            page_token = None
+            while True:
+                result = self.api.files().list(
+                    q=f"'{current}' in parents and trashed=false",
+                    pageSize=1000,
+                    pageToken=page_token,
+                    orderBy="folder,name,createdTime",
+                    fields="nextPageToken,files(id,name,mimeType,parents,createdTime)",
+                ).execute()
+                for item in result.get("files", []):
+                    if item.get("mimeType") == FOLDER_MIME:
+                        pending.append(item["id"])
+                    elif item.get("mimeType") == "application/pdf":
+                        yield item
+                page_token = result.get("nextPageToken")
+                if not page_token:
+                    break
 
     def _list_direct_pdf(self, folder_id: str) -> Optional[dict]:
         q = (

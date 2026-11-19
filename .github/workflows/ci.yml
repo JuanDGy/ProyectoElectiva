@@ -24,7 +24,7 @@ jobs:
         run: uv sync --frozen
 
       - name: Syntax check
-        run: uv run python -m compileall -q app pipeline ml services scripts main.py
+        run: uv run python -m compileall -q app pipeline ml services scripts main.py cli.py
 
       - name: Unit tests
         run: uv run python -m pytest -q

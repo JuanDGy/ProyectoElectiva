@@ -20,7 +20,7 @@ los documentos enviados a revisión o sin clasificar cuentan como procesados.
 Busca también en las subcarpetas de 01A. Por ejemplo, `01A/CAMPUS/factura.pdf`
 se procesa con sede `CAMPUS`; las carpetas anidadas conservan su ruta como sede.
 La sede se guarda antes de mover el archivo, para conservarla en los reintentos.
-Todavía no recorre automáticamente todas las subcarpetas del histórico 2025.
+El histórico completo se importa con `--history` (ver más abajo) sin mover originales.
 
 ## Flujo actual
 
@@ -120,6 +120,28 @@ metadatos de Drive. Solo esa copia se mueve y renombra. Sin `--file-id`, el
 procesador toma un documento de 01A. Si ya perdió su origen y no conserva esos
 metadatos, no se inventa la sede: queda en revisión, aunque su cuenta sea válida.
 
+### Importar el histórico completo
+
+`--history` recorre **todo** el árbol de `DRIVE_HISTORY_ROOT_ID` (carpetas y
+subcarpetas, paginado) y procesa los PDFs **en su sitio**: no copia, no mueve y
+no renombra los originales.
+
+```bash
+uv run python main.py --history --limit 10
+uv run python main.py --history --all
+```
+
+Antes de escribir, descarta las facturas cuya `Cuenta` + `N° Factura` ya está en
+`BD_energia`, así que reimportar el histórico no duplica filas ni siquiera
+cuando el mismo documento existe con otro ID. Cada archivo tratado se registra
+en `data/history_manifest.jsonl` (local): una nueva ejecución se reanuda donde
+quedó. Los errores técnicos no se registran, de modo que el siguiente intento los
+reintenta. `--history` no se puede combinar con `--file-id`.
+
+El OCR corre en CPU: cada factura consume varios segundos, por lo que una
+importación completa de más de mil PDFs tarda horas. Conviene lanzarla por lotes
+y revisar el conteo final (intentados, importados, duplicados, fallidos).
+
 `BD_energia` mantiene las columnas existentes y añade `ValorFacturado` al final:
 
 ```text
@@ -149,7 +171,9 @@ sustituye ese cero por el subtotal de energía. Si no se identifica la etiqueta 
 la tabla no es coherente, la factura sigue pendiente de revisión.
 
 La hoja `LISTA_CUENTAS_ENERGIA` existente no se modifica ni se usa. `Predicciones`
-usa: Fecha ejecución, Sede, Año, Mes, Consumo predicho (kWh), Modelo.
+usa: Fecha ejecución, Sede, Año, Mes, Consumo predicho (kWh), Modelo. El pronóstico
+**por cuenta** se publica aparte, en `Predicciones_Cuenta` (ver abajo), para no
+romper ese contrato de total por sede.
 
 ## Modelado y MLOps
 
@@ -165,9 +189,77 @@ uv run mlflow ui --backend-store-uri sqlite:///mlruns/v1_tracking.db
 # Sustituir ID_CANDIDATO por el ID del modelo que se quiere probar.
 uv run python -m ml.predict --cuenta 04525220 --year 2025 --month 11 \
   --model-path models/candidates/ID_CANDIDATO/model.joblib
+
+# Pronóstico por cuenta: primero en pantalla, luego en la hoja Predicciones_Cuenta.
+uv run python -m ml.publish --model-path models/candidates/ID_CANDIDATO/model.joblib
+uv run python -m ml.publish --model-path models/candidates/ID_CANDIDATO/model.joblib --write
+
+# Reporte visual (PNG + HTML) del candidato más reciente.
+uv run python -m ml.report
 ```
 
-Cada candidato exporta train/test, exclusiones, validaciones y predicciones con hashes de datos y código. La inferencia v1 entrega salida local. Totales por sede, costos y publicación en Sheets requieren conciliar cuentas/sedes y su esquema. El histórico actual no permite validar estacionalidad anual ni precisión para una fecha reciente sin actualizar las facturas.
+`ml.publish` pronostica el **primer mes sin ninguna observación** (por defecto) o
+el mes indicado con `--year`/`--month`. Publica una fila por cuenta con sede,
+modelo, antigüedad del último dato y política de rezago. Solo escribe con
+`--write`; la pestaña se crea si no existe y reejecutar no duplica filas (la
+identidad es cuenta + año + mes + modelo).
+
+`ml.report` deja `reports/report_FECHA/` con `index.html` y cuatro gráficos:
+modelos frente a la persistencia, distribución de errores, cobertura por mes y
+series por cuenta con histórico, prueba y pronóstico. Es de solo lectura.
+
+Cada candidato exporta train/test, exclusiones, validaciones y predicciones con hashes de datos y código. La inferencia v1 entrega salida local. Los totales por sede y los costos siguen requiriendo conciliar cuentas/sedes.
+
+## Extracción con LLM (opcional)
+
+El pipeline local no necesita credenciales de IA. Si existe `GEMINI_API_KEY` en `.env`, se puede usar Gemini como extractor alternativo y como auditor de lo ya escrito:
+
+```bash
+uv run python scripts/compare_ocr_llm.py --limit 15 --seed 7
+```
+
+Compara, sobre las mismas facturas y con referencia revisada, el OCR local contra el LLM (solo y con una regla determinista que respeta el `TOTAL A PAGAR` declarado). Escribe `reports/ocr_vs_llm_FECHA.{json,png}`.
+
+Resultado y límites en [docs/COMPARATIVA_OCR_LLM.md](docs/COMPARATIVA_OCR_LLM.md): el LLM no supera al OCR en facturas con texto nativo, falla en facturas de `$0` si no se valida, y aporta como respaldo en escaneos y como contraste de la hoja. Por eso **propone, no escribe**: cualquier valor sugerido debe pasar la validación determinista y la revisión humana antes de tocar `BD_energia`.
+
+### Revisar la cola de `01C_PENDIENTES`
+
+La revisión es en dos pasos: primero se genera una propuesta, después se aplica.
+Sin `--apply` el comando no mueve archivos ni escribe en Sheets.
+
+```bash
+# 1) Propuesta. OCR local primero; solo los campos vacíos se le piden al LLM.
+uv run python -m pipeline.pending --limit 50
+
+# 2) Leer data/llm_proposals/pending_FECHA.json y decidir.
+
+# 3) Aplicar solo lo que vuelve a validar al momento de aplicar.
+uv run python -m pipeline.pending --apply --from data/llm_proposals/pending_FECHA.json
+```
+
+Cada fila se contrasta con tres fuentes independientes antes de moverse: el nombre
+del archivo (que escribió la propia tubería), el texto del PDF y la etiqueta
+`TOTAL A PAGAR`. Un valor propuesto por el LLM sin cita literal, o que contradiga
+el documento, deja la factura en `01C` y se lista con su motivo. El total del
+documento siempre gana sobre la propuesta del modelo.
+
+Además del contraste, el total tiene que ser un valor a pagar creíble: nunca se
+acepta un negativo (es un saldo a favor), ni un cero que el documento no declare
+(`TOTAL A PAGAR $0` o `FACTURA SIN COBRO`), ni un total que implique un precio por
+kWh imposible. Los casos dudosos —consumo en cero con cobro, precio raro— quedan
+como aviso y se ven en el JSON.
+
+```bash
+# Recalificar un JSON ya generado tras cambiar una regla: no repite OCR ni LLM.
+uv run python -m pipeline.pending --revalidate --from data/llm_proposals/pending_FECHA.json
+```
+
+`--apply` mueve el PDF a `02_FACTURAS_ENERGIA/<sede>/`, lo renombra, agrega la fila
+a `BD_energia` con `Observaciones` que dice qué completó el LLM, y escribe
+`data/llm_proposals/applied_FECHA.jsonl` con la carpeta de origen para poder
+revertir. Lo ya registrado (misma cuenta + factura, o mismo ID) se omite como
+duplicado. `--to-01d` mueve además los archivos que no son de energía a
+`01D_NO_PROCESABLES`.
 
 ## Docker
 
@@ -192,3 +284,108 @@ dentro del contenedor. Las credenciales no se incluyen en la imagen.
 ```bash
 uv run python -m pytest -q
 ```
+
+## Operación unificada y visualización en Google Sheets
+
+La nueva interfaz de consola abre un menú con `uv run python cli.py`. El comando
+`uv run python cli.py --help` expone opciones en español para importar el histórico,
+examinar pendientes, comparar OCR/Gemini, competir con modelos y publicar visualizaciones.
+
+La competencia ampliada incorpora redes **RBF**, **MLP**, **LSTM** de dos rezagos y
+**SVR** radial. Para ejecutarla sobre el mismo test temporal:
+
+```bash
+uv run python cli.py competencia --modelos rbf,lstm,mlp,svr --enfoques level
+```
+
+Los pronósticos por cuenta se guardan en `Predicciones_Cuenta`; tres gráficos nativos
+en `Graficos_Predicciones` muestran una cuenta, el top 15 y la cobertura mensual.
+El comando de actualización es:
+
+```bash
+uv run python cli.py graficos --publicar
+```
+
+El modo sin `--publicar` es de consulta. Para tramitar pendientes sin cambiar archivos,
+usar `uv run python cli.py pendientes revisar --limite 10`. Para aplicar un JSON
+revisado, usar `uv run python cli.py pendientes aplicar --archivo RUTA`.
+
+Consulta la [guía integral](docs/GUIA_INTEGRAL_PROYECTO.md) como base del informe final.
+
+
+## Auditoría documental y autorización antes de aplicar
+
+Las propuestas antiguas se deben renovar para incorporar la huella SHA-256. La CLI
+de producción bloquea cualquier aplicación de facturas sin revisión humana
+individual y huella coherente. Renovar y auditar **no modifican Drive ni Sheets**:
+
+    uv run python cli.py pendientes renovar --archivo data/llm_proposals/pending_revisado.json --limite 38
+    uv run python cli.py pendientes auditar --archivo data/llm_proposals/verified_20261118_174637.json --online --verificar-pdf
+
+Para aprobar cada PDF desde una terminal interactiva, verificarlo visualmente y
+escribir APROBAR, uno a uno:
+
+    uv run python cli.py pendientes aprobar --archivo data/llm_proposals/verified_20261118_174637.json
+
+Solo después, con el JSON aprobado y respaldado:
+
+    uv run python cli.py pendientes aplicar --archivo data/llm_proposals/approved_FECHA.json
+
+La aplicación usa bitácora y reconciliación conservadora ante resultados
+inciertos de Sheets. Consultar [operación y recuperación](docs/OPERACION_Y_RECUPERACION.md)
+y [documentación general](docs/GUIA_INTEGRAL_PROYECTO.md).
+
+**Evidencia al cierre:** suite de 170 pruebas correctas; auditoría remota de
+50 PDFs (15 verificados, 35 en revisión). Ninguna factura real fue movida en
+este cierre. No hay modelo champion promovido por la competencia v2.
+
+## Comparativas OCR/LLM y modelos en Google Sheets
+
+Además de `Predicciones_Cuenta` y `Graficos_Predicciones`, EcoData administra
+dos pestañas nuevas: **Comparativa_OCR_LLM** y **Comparativa_Modelos**.
+
+```bash
+# Previsualizar tablas sin acceder a Google
+uv run python cli.py comparativas
+
+# Publicar ambas y actualizar sus gráficos nativos
+uv run python cli.py comparativas --publicar
+
+# Publicar solo una
+uv run python cli.py comparativas --solo ocr --publicar
+uv run python cli.py comparativas --solo modelos --publicar
+```
+
+La comparación OCR utiliza el reporte de 15 facturas y seis campos, con nota
+expresa del sesgo de su referencia. La competencia agrupa 102 configuraciones
+comparables de 13 familias, seleccionando una por validación **antes de mostrar
+sus resultados de test**. Los dos modelos v1 registrados se exponen por separado.
+Los gráficos se actualizan por título sin duplicarse.
+
+Detalles, fuentes, metodología y límites:
+[Comparativas en Sheets](docs/COMPARATIVAS_SHEETS.md).
+
+## Selector de cuenta en los gráficos de consumo
+
+La pestaña **Graficos_Predicciones** ahora tiene un desplegable en **B4**.
+La lista contiene las cuentas del mismo modelo y mes que se está graficando.
+Al seleccionar una cuenta, las fórmulas de las columnas **B** (consumo
+real) y **C** (tramo hacia el pronóstico) consultan la tabla auxiliar
+**Datos_Graficos_Cuenta** y el gráfico de línea se actualiza directamente
+desde Google Sheets, sin ejecutar Python.
+
+Se mantienen las cuentas con ceros iniciales, y los meses sin factura se
+guardan como SIN_DATO en la fuente para evitar mostrar consumos falsos de
+cero kWh. El tramo discontinuo comienza en el último consumo observado y
+termina en la estimación. No es una serie de pronósticos mensuales intermedios.
+
+Para reconstruir los datos y mantener la elección de B4 cuando siga siendo
+válida:
+
+    uv run python cli.py graficos --publicar
+
+Este selector cambia solamente **la cuenta mostrada en el gráfico de
+histórico**, no los resultados de las 45 predicciones ni los gráficos
+comparativos de las otras cuentas. La lista se actualiza al publicar otro
+periodo o modelo. La hoja técnica Datos_Graficos_Cuenta es un origen
+administrado por el programa y no debe editarse a mano.

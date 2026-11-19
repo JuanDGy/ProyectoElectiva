@@ -21,5 +21,7 @@ Archive.zip
 *.tar.gz
 data/catalog/
 data/reports/
+data/history_manifest.jsonl
+data/llm_proposals/
 mlflow.db
 mlflow.db-*

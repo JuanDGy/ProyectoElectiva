@@ -46,3 +46,30 @@ def test_unknown_sheet_layout_is_not_overwritten():
     table=[['Columna desconocida']];sh=service(table)
     with pytest.raises(RuntimeError,match='incompatibles'):sh.ensure_headers('bd',ENERGY_HEADERS)
     assert table==[['Columna desconocida']]
+
+
+def test_ensure_sheet_creates_only_missing_tabs():
+    created = []
+
+    class Request:
+        def __init__(self, result): self.result = result
+        def execute(self): return self.result()
+
+    titles = ['BD_energia']
+
+    def get(**kwargs):
+        return Request(lambda: {'sheets': [{'properties': {'title': t}} for t in titles]})
+
+    def batch(**kwargs):
+        titles.append(kwargs['body']['requests'][0]['addSheet']['properties']['title'])
+        created.append(titles[-1])
+        return Request(lambda: {})
+
+    api = SimpleNamespace(get=get, batchUpdate=batch)
+    sh = object.__new__(SheetsService)
+    sh.spreadsheet_id = 'id'
+    sh.api = SimpleNamespace(spreadsheets=lambda: api)
+
+    assert sh.ensure_sheet('Predicciones_Cuenta') is True
+    assert sh.ensure_sheet('Predicciones_Cuenta') is False
+    assert created == ['Predicciones_Cuenta']

@@ -33,6 +33,7 @@ class Settings:
     log_level: str
     pdf_min_text_characters: int = 100
     drive_history_root_id: str = ""
+    sheet_predictions_account: str = "Predicciones_Cuenta"
 
 
 def get_settings() -> Settings:
@@ -53,6 +54,7 @@ def get_settings() -> Settings:
         sheet_bd_energy=os.getenv("SHEET_BD_ENERGIA", "BD_energia"),
         sheet_adjust_energy=os.getenv("SHEET_AJUSTE_ENERGIA", "Ajuste_Energia"),
         sheet_predictions=os.getenv("SHEET_PREDICCIONES", "Predicciones"),
+        sheet_predictions_account=os.getenv("SHEET_PREDICCIONES_CUENTA", "Predicciones_Cuenta"),
 
         log_level=os.getenv("LOG_LEVEL", "INFO").upper(),
         pdf_min_text_characters=pdf_min_text_characters,
@@ -69,6 +71,7 @@ class MLSettings:
     spreadsheet_id: str
     sheet_bd_energy: str
     sheet_predictions: str
+    sheet_predictions_account: str = "Predicciones_Cuenta"
 
 
 def get_ml_settings() -> MLSettings:
@@ -81,4 +84,5 @@ def get_ml_settings() -> MLSettings:
         spreadsheet_id=spreadsheet_id,
         sheet_bd_energy=os.getenv("SHEET_BD_ENERGIA", "BD_energia"),
         sheet_predictions=os.getenv("SHEET_PREDICCIONES", "Predicciones"),
+        sheet_predictions_account=os.getenv("SHEET_PREDICCIONES_CUENTA", "Predicciones_Cuenta"),
     )
