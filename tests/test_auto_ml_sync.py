@@ -159,5 +159,5 @@ def test_version_id_is_stable_on_retry():
     original = existing()
     a = plan_sync(make_forecast(), [original], "sha-new", "Experimental")
     b = plan_sync(make_forecast(), [original], "sha-new", "Experimental")
-    assert len(a["archive"][0][-1]) == 64
-    assert a["archive"][0][-1] == b["archive"][0][-1]
+    assert len(a["archive"][0][-2]) == 64
+    assert a["archive"][0][-2] == b["archive"][0][-2]

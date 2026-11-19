@@ -1,0 +1,13 @@
+[Unit]
+Description=EcoData ECCI - conciliar BD_energia con Predicciones_Cuenta
+Documentation=file:%h/Projects/ProyectoElectiva_0.1/docs/ENTRENAMIENTO_AUTOMATICO_Y_SINCRONIZACION.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/Projects/ProyectoElectiva_0.1
+ExecStart=%h/Projects/ProyectoElectiva_0.1/.venv/bin/python -m ml.bd_monitor
+TimeoutStartSec=45min
+Nice=10
+IOSchedulingClass=idle

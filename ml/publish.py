@@ -23,6 +23,8 @@ from services.sheets import SheetsService
 
 HEADERS = ["Fecha ejecución", "Sede", "Cuenta", "Año", "Mes",
            "Consumo predicho (kWh)", "Modelo", "Antigüedad (meses)", "Política"]
+STATUS_FIELD = "Estado predicción"
+STATUS_HEADERS = HEADERS + [STATUS_FIELD]
 
 
 def _months(frame: pd.DataFrame) -> pd.Series:
@@ -44,7 +46,8 @@ def model_id(model_path) -> str:
     return "champion" if parent in {"", ".", "champion", "candidates"} else parent
 
 
-def build_predictions(history: pd.DataFrame, model, identifier: str, year: int, month: int):
+def build_predictions(history: pd.DataFrame, model, identifier: str, year: int, month: int,
+                      include_unavailable: bool = False):
     """Una fila por cuenta con pronóstico para el mes pedido, sin usar datos futuros."""
     spec = getattr(model, "ecodata_spec_", None)
     if not spec or spec.get("dataset_version") != DATASET_VERSION:
@@ -54,30 +57,43 @@ def build_predictions(history: pd.DataFrame, model, identifier: str, year: int, 
     raw["Cuenta"] = raw["Cuenta"].astype(str)
     target = year * 12 + month
     rows, summary = [], {"publicadas": 0, "observadas": 0, "abstenciones": 0, "sin_entrenamiento": 0}
-
+    if include_unavailable:
+        summary["sin_prediccion"] = 0
     for cuenta, group in raw.groupby("Cuenta", sort=True):
         months = _months(group)
+        valid_months = months.dropna()
+        latest = group.loc[months.idxmax()] if not valid_months.empty else group.iloc[-1]
+        common = [date.today().isoformat(),
+                  str(latest.get("Sede", "")).strip(), cuenta, year, month]
+        def unavailable(code):
+            if include_unavailable:
+                rows.append([*common, "", identifier, "", spec["gap_policy"], code])
+                summary["sin_prediccion"] += 1
+
         if (months == target).any():
             summary["observadas"] += 1
+            unavailable("YA_EXISTE_CONSUMO_REAL")
             continue
         if cuenta not in spec["trained_accounts"]:
             summary["sin_entrenamiento"] += 1
+            unavailable("CUENTA_NO_ENTRENADA")
             continue
         try:
             features = prediction_features(group.to_dict("records"), cuenta, year, month,
                                            spec["gap_policy"], spec["include_flagged"], spec["quality_rules"])
         except RuntimeError:
             summary["abstenciones"] += 1
+            unavailable("HISTORIAL_INSUFICIENTE_O_ANTIGUO")
             continue
 
         value = max(0.0, float(model.predict(features[spec["features"]])[0]))
-        latest = group.loc[months.idxmax()]
-        rows.append([date.today().isoformat(), str(latest.get("Sede", "")).strip(), cuenta, year, month,
-                     round(value, 3), identifier, int(features["history_age"].iloc[0]), spec["gap_policy"]])
+        values = [*common, round(value, 3), identifier,
+                  int(features["history_age"].iloc[0]), spec["gap_policy"]]
+        rows.append([*values, "PRONOSTICADA"] if include_unavailable else values)
         summary["publicadas"] += 1
 
     rows.sort(key=lambda row: (row[1], row[2]))
-    return pd.DataFrame(rows, columns=HEADERS), summary
+    return pd.DataFrame(rows, columns=STATUS_HEADERS if include_unavailable else HEADERS), summary
 
 
 def _period_key(value) -> str:
@@ -160,7 +176,9 @@ def publish(year: int | None = None, month: int | None = None,
         entry = get_champion()
         if entry:
             identifier = entry["id"]  # modelo real, no alias ambiguo "champion"
-    predictions, summary = build_predictions(history, joblib.load(resolved), identifier, year, month)
+    predictions, summary = build_predictions(
+        history, joblib.load(resolved), identifier, year, month,
+        include_unavailable=write and synchronize)
     print(f"Pronóstico {year}-{month:02d} | modelo={resolved}")
     print(" | ".join(f"{key}={value}" for key, value in summary.items()))
     if predictions.empty:
@@ -181,6 +199,10 @@ def publish(year: int | None = None, month: int | None = None,
                   f"{report['updates']} actualizadas, {report['adds']} nuevas, "
                   f"{report['archive']} versiones archivadas, "
                   f"{report['unchanged']} sin cambios.")
+            if "sin_prediccion" in summary:
+                print(f"Cobertura: {summary['publicadas']} pronósticos con kWh; "
+                      f"{summary['sin_prediccion']} cuentas con motivo de abstención "
+                      "y consumo estimado en blanco.")
             print("Histórico de versiones: Historial_Predicciones.")
         else:
             created = sheets.ensure_sheet(settings.sheet_predictions_account)

@@ -25,3 +25,6 @@ data/history_manifest.jsonl
 data/llm_proposals/
 mlflow.db
 mlflow.db-*
+
+# Estado/locks del monitor local de Google Sheets
+data/ml/

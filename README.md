@@ -444,3 +444,25 @@ La ejecución imprime cuántas cuentas se actualizaron, agregaron o quedaron
 idénticas. Si el histórico no cambió, es correcto obtener cero cambios.
 El dashboard se actualiza mostrando el modelo vigente, no el selector de
 modelo que estuviera activo en una visualización anterior.
+
+### Sincronización automática desde BD_energia
+
+Para que todas las cuentas registradas en BD_energia aparezcan en
+Predicciones_Cuenta (con valor pronosticado cuando hay datos suficientes,
+o con un motivo de abstención en la columna L cuando no los hay):
+
+    uv run python cli.py sincronizar-bd --solo-verificar
+    uv run python cli.py sincronizar-bd
+
+Hay un temporizador systemd de usuario en deploy/systemd que puede
+comprobar BD_energia cada 5 minutos, incluso si los datos se editan
+manualmente en Sheets. Solo reentrena y republica si el contenido cambió.
+El equipo local debe permanecer encendido y conectado.
+
+Documentación: docs/ENTRENAMIENTO_AUTOMATICO_Y_SINCRONIZACION.md.
+
+En la prueba de 19/11/2026 se sincronizaron **62 cuentas**: 50 pronósticos
+válidos y 12 abstenciones con motivo explícito. Ningún valor faltante se
+representa como cero. La verificación periódica se habilitó mediante
+systemd --user en el portátil ASUS y solo funciona mientras el equipo
+y su sesión de usuario estén disponibles.

@@ -608,7 +608,7 @@ class SheetsService:
                 "properties": {"pixelSize": 50}, "fields": "pixelSize",
             }},
         ]
-        widths = [145, 280, 145, 75, 75, 180, 310, 145, 105, 330, 185]
+        widths = [145, 280, 145, 75, 75, 180, 310, 145, 105, 330, 185, 255]
         for col, width in enumerate(widths):
             requests.append({"updateDimensionProperties": {
                 "range": {"sheetId": sheet_id, "dimension": "COLUMNS",
@@ -666,6 +666,7 @@ class SheetsService:
                     "Política para usar datos faltantes (causal o estricta).",
                     "Huella SHA-256 del histórico local utilizado en la versión.",
                     "Estado del modelo: Champion validado o candidato experimental.",
+                    "PRONOSTICADA: valor estimado. Otros estados: no hay estimación y el consumo queda en blanco.",
                 ]]}],
                 "fields": "note",
             }},
@@ -684,9 +685,17 @@ class SheetsService:
                      for item in items if item.get("Snapshot SHA-256")}
         states = sorted({str(item.get("Estado modelo", ""))
                          for item in items if item.get("Estado modelo")})
+        from ml.prediction_sync import STATUS_FIELD
+        predicted_n = sum(
+            str(r.get(STATUS_FIELD, "PRONOSTICADA")) == "PRONOSTICADA"
+            and str(r.get("Consumo predicho (kWh)", "")).strip() != ""
+            for r in items)
+        unavailable_n = len(items) - predicted_n
         choices = [
             ["EcoData ECCI | Predicciones vigentes", ""],
-            ["Cuentas con predicción", len(items)],
+            ["Cuentas registradas", len(items)],
+            ["Predicciones numéricas", predicted_n],
+            ["Sin predicción (ver columna L)", unavailable_n],
             ["Periodo(s) estimado(s)", ", ".join(periods[-5:])],
             ["Modelo(s) en la tabla", ", ".join(models[-3:])],
             ["Última ejecución registrada", last_execution],
@@ -700,7 +709,7 @@ class SheetsService:
         ]
         self.api.spreadsheets().values().update(
             spreadsheetId=self.spreadsheet_id,
-            range=f"'{sheet_name}'!M2:N12", valueInputOption="RAW",
+            range=f"'{sheet_name}'!M2:N14", valueInputOption="RAW",
             body={"values": choices},
         ).execute()
         self.api.spreadsheets().batchUpdate(
@@ -716,7 +725,7 @@ class SheetsService:
                     "properties": {"pixelSize": 385}, "fields": "pixelSize"}},
                 {"repeatCell": {
                     "range": {"sheetId": sheet_id, "startRowIndex": 1,
-                              "endRowIndex": 12, "startColumnIndex": 12,
+                              "endRowIndex": 14, "startColumnIndex": 12,
                               "endColumnIndex": 13},
                     "cell": {"userEnteredFormat": {
                         "backgroundColor": dark,
@@ -742,7 +751,7 @@ class SheetsService:
             {"repeatCell": {
                 "range": {"sheetId": sheet_id, "startRowIndex": 0,
                           "endRowIndex": 1, "startColumnIndex": 0,
-                          "endColumnIndex": 14},
+                          "endColumnIndex": 15},
                 "cell": {"userEnteredFormat": {
                     "backgroundColor": {"red": .11, "green": .21, "blue": .34},
                     "textFormat": {"bold": True, "foregroundColor": {
@@ -757,7 +766,7 @@ class SheetsService:
             }},
         ]
         widths = [145, 275, 145, 75, 75, 175, 310, 150,
-                  105, 320, 205, 190, 380, 330]
+                  105, 320, 205, 190, 380, 330, 255]
         for col, width in enumerate(widths):
             requests.append({"updateDimensionProperties": {
                 "range": {"sheetId": sheet_id, "dimension": "COLUMNS",
@@ -768,7 +777,7 @@ class SheetsService:
             requests.append({"setBasicFilter": {"filter": {
                 "range": {"sheetId": sheet_id, "startRowIndex": 0,
                           "endRowIndex": len(rows)+1,
-                          "startColumnIndex": 0, "endColumnIndex": 14}}}})
+                          "startColumnIndex": 0, "endColumnIndex": 15}}}})
         requests.append({"repeatCell": {
             "range": {"sheetId": sheet_id, "startColumnIndex": 2,
                       "endColumnIndex": 3},

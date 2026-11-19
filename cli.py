@@ -39,6 +39,10 @@ def setup():
     p = argparse.ArgumentParser(description="EcoData: facturas, Gemini, ML y dashboard de Sheets.")
     sub = p.add_subparsers(dest="command")
     sub.add_parser("estado", help="Resumen local sin usar Google")
+    monitor = sub.add_parser("sincronizar-bd",
+        help="Detectar facturas nuevas en BD_energia y actualizar predicciones por cuenta")
+    monitor.add_argument("--solo-verificar", action="store_true")
+    monitor.add_argument("--forzar", action="store_true")
     refresh = sub.add_parser(
         "actualizar-predicciones",
         help="Publicar en Predicciones_Cuenta y actualizar sus gráficos, con flujo completo opcional")
@@ -99,6 +103,10 @@ def dispatch(args, parser):
     cmd = args.command
     if cmd == "estado":
         return status()
+    if cmd == "sincronizar-bd":
+        return invoke("ml.bd_monitor",
+                      *(["--solo-verificar"] if args.solo_verificar else []),
+                      *(["--forzar"] if args.forzar else []))
     if cmd == "actualizar-predicciones":
         if (args.anio is None) != (args.mes is None):
             parser.error("--anio y --mes deben indicarse juntos")

@@ -140,3 +140,88 @@ ejecución del modelo y la última verificación de Sheets, además de mostrar
 el identificador de modelo y SHA-256 del snapshot. Si la sincronización
 informa 0 actualizaciones y 0 inserciones, los valores eran idénticos:
 NO es un fallo. La verificación se registra aunque no cambien las cifras.
+
+## Detección automática de facturas nuevas en BD_energia
+
+A partir del 19 de noviembre de 2026, se dispone de ml.bd_monitor,
+que compara el contenido vivo de BD_energia (no solo el CSV local) con
+la última versión **procesada correctamente**, identificada mediante
+SHA-256 estable frente al reordenamiento de filas.
+
+    # Inspección que NO cambia modelos, archivos ni Sheets:
+    uv run python cli.py sincronizar-bd --solo-verificar
+
+    # Si hay nuevas facturas: snapshot, competencia, entrenamiento
+    # y actualización real de Predicciones_Cuenta y gráficos:
+    uv run python cli.py sincronizar-bd
+
+    # Reprocesar aun cuando las facturas no hayan cambiado:
+    uv run python cli.py sincronizar-bd --forzar
+
+El proceso automático solo se completa cuando la hoja original no ha
+cambiado durante el entrenamiento y la publicación. Si falla alguna
+etapa, no confirma la huella y se puede reintentar. Se usa un bloqueo
+de proceso para evitar dos sincronizaciones a la vez.
+
+Para las ediciones hechas directamente en la interfaz de Google Sheets,
+hay un **temporizador local en el portátil ASUS** que ejecuta la revisión
+aproximadamente cada cinco minutos, con los siguientes archivos:
+
+    deploy/systemd/ecodata-bd-sync.service
+    deploy/systemd/ecodata-bd-sync.timer
+
+Instalación local (primero comprobar la ruta del proyecto):
+
+    mkdir -p ~/.config/systemd/user
+    cp deploy/systemd/ecodata-bd-sync.* ~/.config/systemd/user/
+    systemctl --user daemon-reload
+    systemctl --user enable --now ecodata-bd-sync.timer
+    systemctl --user list-timers ecodata-bd-sync.timer
+    journalctl --user -u ecodata-bd-sync.service -n 60
+
+Desactivar la automatización local:
+
+    systemctl --user disable --now ecodata-bd-sync.timer
+
+El ordenador debe estar encendido, con acceso a Internet y Google OAuth
+vigente. Google Sheets por sí solo NO inicia scripts de Python.
+Si el equipo está apagado, la sincronización se hará al volver a
+estar activa la sesión/tarea. El proceso usa la competencia completa
+únicamente si se detecta una modificación de BD_energia; si las
+facturas son idénticas, no reentrena ni reescribe predicciones.
+
+### Cuentas sin predicción válida
+
+La pestaña Predicciones_Cuenta incluye todas las cuentas que existen
+en BD_energia para el periodo estimado. La columna L, Estado predicción,
+distingue PRONOSTICADA, CUENTA_NO_ENTRENADA,
+HISTORIAL_INSUFICIENTE_O_ANTIGUO y YA_EXISTE_CONSUMO_REAL.
+
+En las cuentas con abstención, Consumo predicho (kWh) está **vacío**.
+No se inventa el consumo ni se sustituye por un cero, que representa
+una observación numérica real. Los gráficos solo consideran filas con
+un valor estimado válido, y la tabla registra todas las cuentas con
+identificación y motivo de exclusión. Nuevos registros pueden cambiar
+la situación de una cuenta de abstención a PRONOSTICADA en el siguiente
+entrenamiento. Las versiones reemplazadas se archivan.
+
+El objetivo actual es un mes común, siguiente al mayor mes de consumo
+registrado en BD_energia. No se interpreta como pronóstico futuro
+automático respecto de la fecha del sistema.
+
+### Primera ejecución real del monitor (19/11/2026)
+
+Se detectaron 639 facturas vigentes en BD_energia frente a 636
+en el snapshot previo. Tras recalcular y publicar, Predicciones_Cuenta
+contiene 62 cuentas únicas para febrero de 2026: 50 tienen estimación
+numérica y 12 llevan el motivo explícito de abstención (ocho con
+historial insuficiente o antiguo, cuatro sin entrenamiento elegible).
+El historial de versiones conserva las predicciones que fueron reemplazadas.
+La hoja de gráficos confirmó el nuevo SVR y 50 cuentas pronosticadas.
+
+Se comprobó posteriormente que el monitor vuelve a consultar la hoja,
+encuentra las mismas 639 filas y reporta «sin cambios», por lo que NO
+reentrena si no existe un cambio real. El temporizador local fue habilitado
+en el portátil ASUS para una comprobación aproximadamente cada cinco minutos.
+Su primera ejecución encontró un bloqueo de otro proceso sincronizador
+y finalizó sin generar un duplicado.

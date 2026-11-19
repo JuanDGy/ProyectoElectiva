@@ -12,11 +12,13 @@ import math
 
 import pandas as pd
 
-from ml.publish import HEADERS, _period_key
+from ml.publish import HEADERS, STATUS_FIELD, _period_key
 
 EXTRA_HEADERS = ["Snapshot SHA-256", "Estado modelo"]
-CURRENT_HEADERS = HEADERS + EXTRA_HEADERS
-HISTORY_HEADERS = CURRENT_HEADERS + ["Archivado el", "Motivo reemplazo", "ID de cambio"]
+CURRENT_HEADERS = HEADERS + EXTRA_HEADERS + [STATUS_FIELD]
+# Mantener los 14 campos existentes de Historial_Predicciones en su orden.
+HISTORY_HEADERS = CURRENT_HEADERS[:-1] + [
+    "Archivado el", "Motivo reemplazo", "ID de cambio", STATUS_FIELD]
 MAIN_SHEET = "Predicciones_Cuenta"
 HISTORY_SHEET = "Historial_Predicciones"
 
@@ -46,7 +48,14 @@ def _equivalent(previous: dict, new: dict) -> bool:
         old, actual = previous.get(col, ""), new.get(col, "")
         if col == "Consumo predicho (kWh)":
             a, b = _number(old), _number(actual)
-            if a is None or b is None or not math.isclose(a, b, abs_tol=.0005):
+            if (a is None) != (b is None):
+                return False
+            if a is not None and not math.isclose(a, b, abs_tol=.0005):
+                return False
+        elif col == STATUS_FIELD and not str(old).strip() and str(actual) == "PRONOSTICADA":
+            # Versiones anteriores a la columna de estado: los kWh válidos
+            # siguen siendo la misma predicción. Solo completar metadatos.
+            if _number(previous.get("Consumo predicho (kWh)")) is None:
                 return False
         elif str(old).strip() != str(actual).strip():
             return False
@@ -56,13 +65,16 @@ def _equivalent(previous: dict, new: dict) -> bool:
 def plan_sync(predictions: pd.DataFrame, existing: list[dict],
               snapshot_hash: str, state: str) -> dict:
     if predictions.empty:
-        return {"updates": [], "adds": [], "archive": [], "unchanged": 0}
+        return {"updates": [], "adds": [], "archive": [],
+                "status_updates": [], "unchanged": 0}
     missing = set(HEADERS) - set(predictions.columns)
     if missing:
         raise ValueError(f"Columnas ausentes: {sorted(missing)}")
     enriched = predictions.copy()
     enriched[EXTRA_HEADERS[0]] = snapshot_hash
     enriched[EXTRA_HEADERS[1]] = state
+    if STATUS_FIELD not in enriched:
+        enriched[STATUS_FIELD] = "PRONOSTICADA"
 
     known = {}
     for index, item in enumerate(existing, start=2):
@@ -75,6 +87,7 @@ def plan_sync(predictions: pd.DataFrame, existing: list[dict],
         known[key] = (index, item)
 
     updates, additions, archive, unchanged = [], [], [], 0
+    status_updates = []
     input_seen = set()
     for row in enriched.to_dict("records"):
         key = active_key(row)
@@ -87,6 +100,8 @@ def plan_sync(predictions: pd.DataFrame, existing: list[dict],
             continue
         row_number, previous = known[key]
         if _equivalent(previous, row):
+            if not previous.get(STATUS_FIELD) and row[STATUS_FIELD] == "PRONOSTICADA":
+                status_updates.append((row_number, "PRONOSTICADA"))
             unchanged += 1
             continue
         old = [previous.get(col, "") for col in CURRENT_HEADERS]
@@ -96,11 +111,11 @@ def plan_sync(predictions: pd.DataFrame, existing: list[dict],
             "clave": key, "anterior": old,
             "nueva": [v for i, v in enumerate(target) if i != 0],
         }, ensure_ascii=False, default=str, sort_keys=True).encode()).hexdigest()
-        archive.append([*old, datetime.now(timezone.utc).isoformat(),
-                        reason, revision_id])
+        archive.append([*old[:11], datetime.now(timezone.utc).isoformat(),
+                        reason, revision_id, old[11]])
         updates.append((row_number, target))
     return {"updates": updates, "adds": additions, "archive": archive,
-            "unchanged": unchanged}
+            "status_updates": status_updates, "unchanged": unchanged}
 
 
 def sync_predictions(sheets, sheet_name: str, predictions: pd.DataFrame,
@@ -111,7 +126,7 @@ def sync_predictions(sheets, sheet_name: str, predictions: pd.DataFrame,
     sheets.ensure_sheet(sheet_name)
     existing = sheets.get_rows(sheet_name, unformatted=True)
     plan = plan_sync(predictions, existing, snapshot_hash, state)
-    if not any(plan[key] for key in ("updates", "adds")):
+    if not any(plan[key] for key in ("updates", "adds", "status_updates")):
         sheets.format_predictions_sheet(sheet_name, CURRENT_HEADERS)
         return {k: len(v) if isinstance(v, list) else v for k, v in plan.items()}
 
@@ -134,9 +149,11 @@ def sync_predictions(sheets, sheet_name: str, predictions: pd.DataFrame,
 
     # Google Sheets no ofrece transacción atómica entre ambas pestañas.
     # Todas las filas modificadas se envían en un batch de valores.
-    if plan["updates"]:
-        payload = [{"range": f"'{sheet_name}'!A{n}:K{n}", "values": [row]}
+    if plan["updates"] or plan["status_updates"]:
+        payload = [{"range": f"'{sheet_name}'!A{n}:L{n}", "values": [row]}
                    for n, row in plan["updates"]]
+        payload += [{"range": f"'{sheet_name}'!L{n}", "values": [[value]]}
+                    for n, value in plan["status_updates"]]
         sheets.api.spreadsheets().values().batchUpdate(
             spreadsheetId=sheets.spreadsheet_id,
             body={"valueInputOption": "RAW", "data": payload},
