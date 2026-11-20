@@ -106,6 +106,9 @@ class SheetsService:
                           *, account_data_rows: list[list] | None = None,
                           accounts: list[str] | None = None,
                           models: list[str] | None = None,
+                          years: list[int] | None = None,
+                          months: list[int] | None = None,
+                          model_period_pairs: list[str] | None = None,
                           account_sheet_name: str = "Datos_Graficos_Cuenta") -> dict:
         """Sincroniza la pestaña reservada a gráficos nativos, sin duplicarlos.
 
@@ -126,10 +129,38 @@ class SheetsService:
             if account_sheet_name != "Datos_Graficos_Cuenta":
                 raise ValueError("Nombre de hoja auxiliar no permitido")
             self.ensure_sheet(account_sheet_name)
+            if years and months:
+                # Conservar TODOS los periodos y modelos puede superar el
+                # grid preexistente; values.update no garantiza ampliarlo.
+                info = self.api.spreadsheets().get(
+                    spreadsheetId=self.spreadsheet_id,
+                    fields="sheets(properties(sheetId,title,gridProperties(rowCount,columnCount)))",
+                ).execute()
+                prop = next(item["properties"] for item in info.get("sheets", [])
+                            if item["properties"]["title"] == account_sheet_name)
+                grid = prop["gridProperties"]
+                grow = {}
+                if int(grid["rowCount"]) < len(account_data_rows):
+                    grow["rowCount"] = len(account_data_rows) + 50
+                if int(grid["columnCount"]) < 17:
+                    grow["columnCount"] = 17
+                if grow:
+                    self.api.spreadsheets().batchUpdate(
+                        spreadsheetId=self.spreadsheet_id,
+                        body={"requests": [{"updateSheetProperties": {
+                            "properties": {
+                                "sheetId": prop["sheetId"],
+                                "gridProperties": grow,
+                            },
+                            "fields": ",".join(
+                                f"gridProperties.{key}" for key in grow),
+                        }}]},
+                    ).execute()
             self.api.spreadsheets().values().clear(
                 spreadsheetId=self.spreadsheet_id,
-                range=f"'{account_sheet_name}'!A:N" if models
-                      else f"'{account_sheet_name}'!A:F", body={},
+                range=(f"'{account_sheet_name}'!A:Q" if years and months
+                       else f"'{account_sheet_name}'!A:N" if models
+                       else f"'{account_sheet_name}'!A:F"), body={},
             ).execute()
             self.api.spreadsheets().values().update(
                 spreadsheetId=self.spreadsheet_id,
@@ -141,7 +172,10 @@ class SheetsService:
             if models:
                 lookup = f"'{account_sheet_name}'!$A$2:$F$" + str(total)
                 for row_number in range(6, 15):
-                    key = f'$F$4&"|"&$B$4&"|"&$A{row_number}'
+                    period = 'TEXT(DATE($I$4;$K$4;1);"yyyy-mm")'
+                    key = (f'$F$4&"|"&{period}&"|"&$B$4&"|"&$A{row_number}'
+                           if years and months else
+                           f'$F$4&"|"&$B$4&"|"&$A{row_number}')
                     def lookup_line(column):
                         call = f"VLOOKUP({key};{lookup};{column};FALSE)"
                         return f'=IFERROR(IF({call}="SIN_DATO";"";{call});"")'
@@ -164,7 +198,9 @@ class SheetsService:
                 covered = f"'{account_sheet_name}'!$L$2:$N$" + str(total)
                 ranking_formulas = []
                 for row_number in range(6, 21):
-                    key = f'$F$4&"|"&(ROW()-5)'
+                    key = (f'$F$4&"|"&TEXT(DATE($I$4;$K$4;1);"yyyy-mm")'
+                           '&"|"&(ROW()-5)' if years and months
+                           else f'$F$4&"|"&(ROW()-5)')
                     ranking_formulas.append([
                         f'=IFERROR(VLOOKUP({key};{ranked};2;FALSE);"")',
                         f'=IFERROR(VLOOKUP({key};{ranked};3;FALSE);"")',
@@ -177,7 +213,9 @@ class SheetsService:
                 ).execute()
                 coverage_formulas = []
                 for row_number in range(6, 15):
-                    key = f'$F$4&"|"&$H{row_number}'
+                    key = (f'$F$4&"|"&TEXT(DATE($I$4;$K$4;1);"yyyy-mm")'
+                           f'&"|"&$H{row_number}' if years and months
+                           else f'$F$4&"|"&$H{row_number}')
                     def lookup_coverage(column):
                         call = f"VLOOKUP({key};{covered};{column};FALSE)"
                         return f'=IFERROR(IF({call}="SIN_DATO";"";{call});"")'
@@ -190,16 +228,44 @@ class SheetsService:
                     valueInputOption="USER_ENTERED",
                     body={"values": coverage_formulas},
                 ).execute()
-                # El resumen también responde al selector F4, no queda
-                # etiquetado falsamente con el primer modelo publicado.
+                if years and months:
+                    # Las fechas del eje X siguen a los desplegables de año/mes.
+                    monthly = [
+                        [f'=TEXT(EDATE(DATE($I$4;$K$4;1);{line}-14);"yyyy-mm")']
+                        for line in range(6, 15)
+                    ]
+                    for col in ("A", "H"):
+                        self.api.spreadsheets().values().update(
+                            spreadsheetId=self.spreadsheet_id,
+                            range=f"'{sheet_name}'!{col}6:{col}14",
+                            valueInputOption="USER_ENTERED",
+                            body={"values": monthly},
+                        ).execute()
+                    period = 'TEXT(DATE($I$4;$K$4;1);"yyyy-mm")'
+                    selected = f'$F$4&"|"&{period}'
+                    pairs = f"'{account_sheet_name}'!$Q$2:$Q$" + str(total)
+                    account_key = f'{selected}&"|"&$B$4&"|"&{period}'
+                    id_lookup = f"'{account_sheet_name}'!$A$2:$A$" + str(total)
+                    value_lookup = f"VLOOKUP({account_key};{lookup};6;FALSE)"
+                    summary = (
+                        f'=IF(COUNTIF({pairs};{selected})=0;'
+                        '"Sin predicciones numéricas para el modelo y periodo seleccionados";'
+                        f'IF(COUNTIF({id_lookup};{account_key})=0;'
+                        '"La cuenta seleccionada no tiene predicción en este periodo";'
+                        f'"Periodo estimado: "&{period}&" | Cuenta: "&$B$4&'
+                        '" | Modelo: "&$F$4&" | Consumo estimado: "&'
+                        f'IFERROR(TEXT({value_lookup};"0.000")&" kWh";"Sin dato")))'
+                    )
+                else:
+                    summary = (
+                        '="Periodo estimado: "&$H$14&" | Modelo seleccionado: "&'
+                        '$F$4&" | Cuentas con predicción: "&$J$14'
+                    )
                 self.api.spreadsheets().values().update(
                     spreadsheetId=self.spreadsheet_id,
                     range=f"'{sheet_name}'!A2",
                     valueInputOption="USER_ENTERED",
-                    body={"values": [[
-                        '="Periodo estimado: "&$H$14&" | Modelo seleccionado: "&'
-                        '$F$4&" | Cuentas con predicción: "&$J$14'
-                    ]]},
+                    body={"values": [[summary]]},
                 ).execute()
         requests = [
             {"updateSheetProperties": {"properties": {
@@ -281,6 +347,42 @@ class SheetsService:
                         "fields": "pixelSize",
                     }},
                 ])
+        if account_data_rows is not None and models and years and months:
+            for col_index, option_column, options, description in [
+                (8, "O", years, "Selecciona un año con predicciones publicadas."),
+                (10, "P", months, "Selecciona un mes con predicciones publicadas."),
+            ]:
+                requests.append({"repeatCell": {
+                    "range": {"sheetId": sheet_id, "startRowIndex": 3,
+                              "endRowIndex": 4, "startColumnIndex": col_index,
+                              "endColumnIndex": col_index + 1},
+                    "cell": {"userEnteredFormat": {
+                        "backgroundColor": {"red": .86, "green": .94, "blue": 1},
+                        "textFormat": {"bold": True, "fontSize": 12},
+                        "numberFormat": {"type": "NUMBER", "pattern": "0"},
+                    }},
+                    "fields": "userEnteredFormat",
+                }})
+                requests.append({"setDataValidation": {
+                    "range": {"sheetId": sheet_id, "startRowIndex": 3,
+                              "endRowIndex": 4, "startColumnIndex": col_index,
+                              "endColumnIndex": col_index + 1},
+                    "rule": {
+                        "condition": {"type": "ONE_OF_RANGE", "values": [{
+                            "userEnteredValue": (
+                                f"='{account_sheet_name}'!$" + option_column + "$2:$"
+                                + option_column + "$" + str(len(options) + 1)
+                            ),
+                        }]},
+                        "showCustomUi": True, "strict": True,
+                        "inputMessage": description,
+                    },
+                }})
+            requests.append({"updateDimensionProperties": {
+                "range": {"sheetId": sheet_id, "dimension": "COLUMNS",
+                          "startIndex": 10, "endIndex": 11},
+                "properties": {"pixelSize": 125}, "fields": "pixelSize",
+            }})
         desired = {item["spec"]["title"] for item in charts}
         for title, chart_id in existing.items():
             if title.startswith("EcoData |") and title not in desired:

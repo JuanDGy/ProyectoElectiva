@@ -179,9 +179,9 @@ def build_dashboard(history: pd.DataFrame, predictions: pd.DataFrame,
         ["EcoData ECCI | Dashboard de predicciones"],
         [f"Periodo estimado: {year}-{month:02d} | Modelo: {model} | Cuentas con pronóstico: {len(predictions)}"],
         ["Datos históricos = facturas; tramo punteado = enlace del último dato real a una estimación. Huecos sin factura NO son consumos observados. Pronóstico experimental."],
-        ["Selecciona la cuenta:", primary,
-         "Usa cada desplegable: cuenta en B4 y modelo en F4; los tres gráficos cambian solos.",
-         "", "Modelo:", model],
+        ["Cuenta:", primary,
+         "Usa los desplegables: cuenta B4, modelo F4, año I4 y mes K4. Los gráficos cambian solos.",
+         "", "Modelo:", model, "", "Año:", year, "Mes:", month],
         ["Mes", "Consumo real (kWh)", "Enlace a estimación (kWh)", "",
          "Cuenta", "Pronóstico kWh", "", "Mes", "Cuentas con dato real", "Cuentas pronosticadas"],
     ]
@@ -297,6 +297,108 @@ def build_multimodel_sources(history: pd.DataFrame,
     return rows, account_options, model_names
 
 
+def collect_model_periods(rows: list[dict]) -> tuple[
+        dict[tuple[int, int, str], pd.DataFrame], list[tuple[int, int]]]:
+    """Índice de cada combinación de año/mes/modelo con predicciones numéricas.
+
+    Los periodos sin pronósticos numéricos también se incluyen como opción
+    del selector para mostrar explícitamente que no hay estimación.
+    """
+    periods, triples = set(), set()
+    for item in rows:
+        try:
+            year, month = int(item.get("Año")), int(item.get("Mes"))
+        except (ValueError, TypeError):
+            continue
+        name = str(item.get("Modelo") or "").strip()
+        if not name or not (1 <= month <= 12):
+            continue
+        periods.add((year, month))
+        triples.add((year, month, name))
+    frames = {}
+    for y, m, name in sorted(triples):
+        try:
+            frame, _ = select_forecasts(rows, name, y, m)
+        except RuntimeError:
+            continue
+        frames[(y, m, name)] = frame
+    return frames, sorted(periods)
+
+
+def build_period_sources(history: pd.DataFrame,
+                         frames: dict[tuple[int, int, str], pd.DataFrame],
+                         periods: list[tuple[int, int]]) -> tuple[
+                             list[list], list[str], list[str], list[int],
+                             list[int], list[str]]:
+    """Fuentes de TODOS los periodos, sin cruzar modelos ni fechas.
+
+    A:F historial; G:H selector cuenta/modelo; I:K ranking;
+    L:N cobertura; O:P selector año/mes; Q combinaciones válidas.
+    """
+    if not frames:
+        raise RuntimeError("No hay periodos con pronósticos numéricos para graficar")
+    accounts = sorted({str(account) for forecast in frames.values()
+                       for account in forecast["Cuenta"]})
+    models = sorted({name for (_, _, name) in frames})
+    years = sorted({y for y, _ in periods})
+    months = sorted({m for _, m in periods})
+    combinations = sorted({f"{name}|{y}-{m:02d}" for y, m, name in frames})
+    result = [[
+        "Modelo|Periodo|Cuenta|Mes", "Modelo", "Cuenta", "Mes",
+        "Consumo real", "Enlace estimado", "Cuentas (selector)",
+        "Modelos (selector)", "Modelo|Periodo|Posición", "Cuenta top",
+        "kWh top", "Modelo|Periodo|Mes", "Con real", "Con predicción",
+        "Años (selector)", "Meses (selector)", "Modelo|Periodo (válido)",
+    ]]
+    rankings, coverage = [], []
+    for y, m in sorted(periods):
+        per_period = {name: frame for (fy, fm, name), frame in frames.items()
+                      if (fy, fm) == (y, m)}
+        if not per_period:
+            continue
+        source, _, _ = build_multimodel_sources(history, per_period, (y, m))
+        target = f"{y}-{m:02d}"
+        for entry in source[1:]:
+            model, account, observation = entry[1:4]
+            result.append([
+                f"{model}|{target}|{account}|{observation}",
+                model, account, observation, entry[4], entry[5],
+                "", "", "", "", "", "", "", "", "", "", "",
+            ])
+            if entry[8]:
+                # Original: modelo|posición
+                rank_model, rank = entry[8].rsplit("|", 1)
+                rankings.append([
+                    f"{rank_model}|{target}|{rank}", entry[9], entry[10],
+                ])
+            if entry[11]:
+                # Ranking/cobertura tienen su propio modelo de origen;
+                # puede ser distinto al de la fila de histórico A:F.
+                coverage_model, observed = entry[11].rsplit("|", 1)
+                coverage.append([
+                    f"{coverage_model}|{target}|{observed}", entry[12], entry[13],
+                ])
+    max_rows = max(len(result)-1, len(accounts), len(models), len(years),
+                   len(months), len(combinations), len(rankings), len(coverage))
+    while len(result) <= max_rows:
+        result.append([""] * 17)
+    for index, value in enumerate(accounts, 1):
+        result[index][6] = value
+    for index, value in enumerate(models, 1):
+        result[index][7] = value
+    for index, value in enumerate(rankings, 1):
+        result[index][8:11] = value
+    for index, value in enumerate(coverage, 1):
+        result[index][11:14] = value
+    for index, value in enumerate(years, 1):
+        result[index][14] = value
+    for index, value in enumerate(months, 1):
+        result[index][15] = value
+    for index, value in enumerate(combinations, 1):
+        result[index][16] = value
+    return result, accounts, models, years, months, combinations
+
+
 def dashboard(write: bool = False, model: str | None = None,
               year: int | None = None, month: int | None = None):
     if (year is None) != (month is None):
@@ -315,21 +417,38 @@ def dashboard(write: bool = False, model: str | None = None,
         sheets.get_rows("Historial_Predicciones", unformatted=True)
         if "Historial_Predicciones" in sheets.sheet_names() else [])
     all_forecasts = active + historical
-    # Periodo predeterminado tomado de la hoja ACTIVA, no de una versión antigua.
-    active_forecasts, active_selected = select_forecasts(active, None, year, month)
-    year, month = active_selected[:2]
-    model_frames = {}
-    for name in sorted({str(row.get("Modelo", "")) for row in all_forecasts
-                        if row.get("Modelo")}):
+    # El periodo publicado más reciente tiene prioridad incluso cuando TODAS
+    # sus cuentas debieron abstenerse (ej. un mes muy alejado del histórico).
+    available_active = []
+    for entry in active:
         try:
-            frame, _ = select_forecasts(
-                all_forecasts, name, year, month)
-            model_frames[name] = frame
-        except RuntimeError:
+            ym = (int(entry["Año"]), int(entry["Mes"]))
+            if 1 <= ym[1] <= 12:
+                available_active.append(ym)
+        except (TypeError, ValueError, KeyError):
             continue
-    if not model_frames:
-        raise RuntimeError("No hay predicciones actuales ni históricas para graficar")
-    # El usuario elige por desplegable F4. La CLI --modelo anula esa selección.
+    if year is None:
+        if not available_active:
+            raise RuntimeError("Predicciones_Cuenta no contiene periodos válidos.")
+        year, month = max(available_active)
+    all_frames, all_periods = collect_model_periods(all_forecasts)
+    if not all_frames:
+        raise RuntimeError("No hay predicciones numéricas publicadas para construir gráficos.")
+    model_frames = {name: frame for (fy, fm, name), frame in all_frames.items()
+                    if (fy, fm) == (year, month)}
+    if model and not any(str(x.get("Modelo") or "") == model
+                         for x in all_forecasts):
+        raise RuntimeError(f"Modelo no publicado: {model}")
+    period_models = Counter(str(x.get("Modelo") or "") for x in active
+                            if str(x.get("Año")) == str(year)
+                            and str(x.get("Mes")) == str(month)
+                            and x.get("Modelo"))
+    selected_model = model or (
+        period_models.most_common(1)[0][0] if period_models
+        else max(model_frames, key=lambda name: len(model_frames[name]))
+        if model_frames else
+        max(all_frames, key=lambda key: (key[0], key[1]))[2]
+    )
     sheet_id = 0
     current_account = None
     if write:
@@ -340,17 +459,44 @@ def dashboard(write: bool = False, model: str | None = None,
             range=f"'{DASHBOARD_SHEET}'!B4").execute().get("values", [])
         if prev and prev[0]:
             current_account = str(prev[0][0]).strip()
-    # Al republicar SIEMPRE partir del modelo vigente de Predicciones_Cuenta,
-    # no de una selección antigua de F4. El usuario puede cambiar F4 después.
-    selected_model = model or active_selected[2]
-    if selected_model not in model_frames:
-        raise RuntimeError(f"Modelo no disponible para {year}-{month:02d}: {selected_model}")
-    forecasts = model_frames[selected_model]
-    selected = (year, month, selected_model)
-    values, charts, summary = build_dashboard(history, forecasts, selected,
-                                              sheet_id, current_account)
-    source_rows, all_accounts, all_models = build_multimodel_sources(
-        history, model_frames, (year, month)) if write else (None, [], [])
+
+    # Un periodo sin números sigue siendo seleccionable, con mensaje visible.
+    # Usamos datos de otro periodo solo como plantilla de gráficos; todas
+    # las fórmulas consultarán el año/mes REAL de los desplegables.
+    has_current_values = selected_model in model_frames
+    if has_current_values:
+        rendering_period = (year, month, selected_model)
+    else:
+        alternatives = sorted(
+            all_frames,
+            key=lambda key: (key[2] == selected_model, key[0], key[1]),
+            reverse=True,
+        )
+        rendering_period = alternatives[0]
+    scaffold = all_frames[rendering_period]
+    values, charts, summary = build_dashboard(
+        history, scaffold, rendering_period, sheet_id, current_account)
+    values[3][5] = selected_model
+    values[3][8] = year
+    values[3][10] = month
+    summary["periodo"] = f"{year}-{month:02d}"
+    summary["modelo"] = selected_model
+    if not has_current_values:
+        summary["cuentas"] = 0
+        print(f"Sin predicciones numéricas para {year}-{month:02d}; "
+              "el selector mostrará el periodo y la ausencia de estimaciones.")
+    if write:
+        source_rows, all_accounts, all_models, all_years, all_months, pairs = (
+            build_period_sources(history, all_frames, all_periods))
+        if selected_model not in all_models:
+            all_models = sorted([*all_models, selected_model])
+            while len(source_rows) <= len(all_models):
+                source_rows.append([""] * 17)
+            for index, row in enumerate(source_rows[1:]):
+                row[7] = all_models[index] if index < len(all_models) else ""
+    else:
+        source_rows, all_accounts, all_models = None, [], []
+        all_years, all_months, pairs = [], [], []
     print(f"Dashboard {summary['periodo']} | modelo={summary['modelo']} | "
           f"cuentas={summary['cuentas']} | destacada={summary['cuenta_destacada']}")
     print(f"Vista previa: {len(values)-5} filas de datos y {len(charts)} gráficos nativos.")
@@ -358,6 +504,7 @@ def dashboard(write: bool = False, model: str | None = None,
         result = sheets.replace_dashboard(
             DASHBOARD_SHEET, values, charts, account_data_rows=source_rows,
             accounts=all_accounts, models=all_models,
+            years=all_years, months=all_months, model_period_pairs=pairs,
             account_sheet_name=ACCOUNT_DATA_SHEET)
         print(f"Google Sheets actualizado: {DASHBOARD_SHEET} | "
               f"{result['charts']} gráficos | {result['rows']} filas")

@@ -466,3 +466,18 @@ válidos y 12 abstenciones con motivo explícito. Ningún valor faltante se
 representa como cero. La verificación periódica se habilitó mediante
 systemd --user en el portátil ASUS y solo funciona mientras el equipo
 y su sesión de usuario estén disponibles.
+
+
+### Dashboard con mes y año dinámicos
+
+En Graficos_Predicciones, los controles B4, F4, I4 y K4 permiten
+seleccionar **cuenta, modelo, año y mes**, respectivamente. Los tres
+gráficos y el resumen se actualizan directamente desde las fórmulas de
+Google Sheets, sin ejecutar un comando adicional.
+
+Para publicar abril de 2026 y añadirlo automáticamente a los selectores:
+
+    uv run python cli.py actualizar-predicciones --anio 2026 --mes 4 --publicar
+
+Las estimaciones de los meses anteriores siguen disponibles. Una
+selección sin datos numéricos presenta un aviso en vez de inventar consumos.

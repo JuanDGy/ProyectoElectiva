@@ -225,3 +225,47 @@ reentrena si no existe un cambio real. El temporizador local fue habilitado
 en el portátil ASUS para una comprobación aproximadamente cada cinco minutos.
 Su primera ejecución encontró un bloqueo de otro proceso sincronizador
 y finalizó sin generar un duplicado.
+
+
+## Selector dinámico por cuenta, modelo, año y mes (19/11/2026)
+
+Graficos_Predicciones ahora dispone de cuatro selectores en la fila 4:
+
+- **B4 — Cuenta:** número de cuenta (con ceros iniciales).
+- **F4 — Modelo:** modelo vigente o histórico publicado.
+- **I4 — Año:** año de un periodo registrado.
+- **K4 — Mes:** número de mes de un periodo registrado.
+
+Datos_Graficos_Cuenta contiene las fuentes de **todos los periodos**
+publicados en Predicciones_Cuenta y Historial_Predicciones, con claves
+modelo|periodo|cuenta|mes. Los gráficos nativos, el ranking Top 15,
+la cobertura y el resumen A2 cambian automáticamente mediante fórmulas
+VLOOKUP al modificar cualquiera de los selectores. No es necesario ejecutar
+Python al cambiar un desplegable.
+
+Cuando se publica un nuevo periodo, por ejemplo abril de 2026:
+
+    uv run python cli.py actualizar-predicciones --anio 2026 --mes 4 --publicar
+
+el comando sincroniza Predicciones_Cuenta **y reconstruye las fuentes
+de todos los meses** (febrero, marzo, abril, etc.). No borra los meses
+anteriores: para cada cuenta+año+mes existe una fila vigente; las versiones
+anteriores permanecen en Historial_Predicciones. El dashboard se abre
+mostrando inicialmente el periodo nuevo, y desde I4/K4 se puede volver
+a cualquiera de los anteriores.
+
+Si alguien selecciona una combinación modelo/mes sin valores
+numéricos publicados, A2 muestra un aviso y la gráfica queda sin puntos
+estimados. Nunca inventa consumos para completar la serie. El año y el mes
+pueden elegirse independientemente; no todos los pares son válidos.
+
+La hoja auxiliar amplía automáticamente su número de filas para
+acomodar periodos y modelos adicionales. Las fechas de los ejes de la
+serie temporal también son fórmulas derivadas de I4/K4, no texto fijo.
+
+La funcionalidad se validó con datos reales de **febrero y marzo de
+2026** (50 y 46 predicciones numéricas del último SVR respectivamente)
+y con pruebas simuladas de abril y de otro año. Se comprobó igualmente
+que un modelo Random Forest anterior sólo devuelve resultados donde
+existen predicciones para el periodo escogido. Después de probar los
+controles, se restauraron sus valores originales.
