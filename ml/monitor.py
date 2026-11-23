@@ -70,7 +70,7 @@ def main():
     report = check(source, args.drift_threshold)
     destination = Path(args.reports_dir); destination.mkdir(parents=True, exist_ok=True)
     path = destination / f'monitor_{datetime.now().strftime("%Y%m%d_%H%M%S")}.json'
-    path.write_text(json.dumps(report, indent=2, ensure_ascii=False))
+    path.write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding='utf-8')
     print(json.dumps(report, indent=2, ensure_ascii=False))
     print(f'Reporte: {path}')
     return 2 if report['needs_retrain'] else 0

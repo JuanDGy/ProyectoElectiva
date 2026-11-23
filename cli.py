@@ -16,19 +16,29 @@ def invoke(module=None, *params):
     return subprocess.call(cmd, cwd=ROOT)
 
 
+def _read_json(path: Path):
+    """Lee JSON generado en UTF-8 o en cp1252 por corridas antiguas."""
+    for encoding in ("utf-8", "cp1252"):
+        try:
+            return json.loads(path.read_text(encoding=encoding))
+        except UnicodeDecodeError:
+            continue
+    return json.loads(path.read_text(encoding="utf-8", errors="replace"))
+
+
 def status():
     path = ROOT / "models/registry.json"
-    d = json.loads(path.read_text()) if path.exists() else {}
+    d = _read_json(path) if path.exists() else {}
     files = sorted((ROOT / "data/llm_proposals").glob("pending_*.json"))
     print("EcoData ECCI | Estado")
     print("Champion:", (d.get("champion") or {}).get("id") or "Ninguno validado")
     print("Challengers:", len(d.get("challengers") or []))
     if files:
-        last = json.loads(files[-1].read_text())
+        last = _read_json(files[-1])
         print("Últimas propuestas:", last.get("resumen"))
     selected = ROOT / "models/auto_selection.json"
     if selected.exists():
-        choice = json.loads(selected.read_text(encoding="utf-8"))
+        choice = _read_json(selected)
         print("Seleccionado por validación:", choice.get("selected_candidate"))
         print("Estado de selección:", choice.get("status"))
     print("Sheets: Predicciones_Cuenta, Historial_Predicciones y Graficos_Predicciones")

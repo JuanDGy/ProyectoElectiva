@@ -6,7 +6,7 @@ No presupone que una escritura de Google Sheets lance Python por sí sola.
 from __future__ import annotations
 
 import argparse
-import fcntl
+from contextlib import contextmanager
 import hashlib
 import json
 import os
@@ -15,12 +15,61 @@ import subprocess
 import sys
 from datetime import datetime, timezone
 
+if os.name == "nt":
+    import msvcrt
+else:
+    import fcntl
+
 from app.config import get_ml_settings
 from services.sheets import SheetsService
 
 ROOT = Path(__file__).resolve().parent.parent
 STATE_FILE = ROOT / "data/ml/bd_prediction_sync_state.json"
 LOCK_FILE = ROOT / "data/ml/bd_prediction_sync.lock"
+
+
+def _acquire_lock(handle) -> bool:
+    """Bloqueo exclusivo no bloqueante, portable entre Linux y Windows."""
+    if os.name == "nt":
+        handle.seek(0)
+        if not handle.read(1):
+            handle.write("\0")
+            handle.flush()
+        handle.seek(0)
+        try:
+            msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+        except OSError:
+            return False
+        return True
+    try:
+        fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        return False
+    return True
+
+
+def _release_lock(handle):
+    if os.name == "nt":
+        handle.seek(0)
+        try:
+            msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+        except OSError:
+            pass
+    else:
+        fcntl.flock(handle, fcntl.LOCK_UN)
+
+
+@contextmanager
+def _exclusive_lock(path: Path):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a+") as handle:
+        if not _acquire_lock(handle):
+            yield False
+            return
+        try:
+            yield True
+        finally:
+            _release_lock(handle)
 
 
 def fingerprint(rows: list[dict]) -> str:
@@ -42,11 +91,8 @@ def _save_state(path: Path, state: dict):
 def monitor_once(*, check_only=False, force=False, state_path=STATE_FILE,
                  lock_path=LOCK_FILE, service=None, runner=None) -> dict:
     state_path, lock_path = Path(state_path), Path(lock_path)
-    lock_path.parent.mkdir(parents=True, exist_ok=True)
-    with lock_path.open("a+") as lock:
-        try:
-            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
+    with _exclusive_lock(lock_path) as acquired:
+        if not acquired:
             print("Otra sincronización de BD_energia está en ejecución; no duplicar.")
             return {"status": "ocupado"}
         settings = get_ml_settings()

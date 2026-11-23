@@ -1,0 +1,37 @@
+{
+  "nota": "Campos verificados a mano contra la imagen renderizada del PDF (2026-11-18). La hoja BD_energia tenia un error en el numero de factura de 1tiBtAOY7jrjgK89pbYwUi85JpwlmopSG: decia 3614916246 y el documento impreso dice 361491624-8.",
+  "files": {
+    "1Pjmay3OTXWBo4inRWsz5puflot1cmPin": {
+      "Cuenta": "04676007",
+      "NumeroFactura": "354949957-1",
+      "kWh": 272.0,
+      "ValorFacturado": 0.0,
+      "InicioPeriodo": "2025-04-29",
+      "FinPeriodo": "2025-05-28"
+    },
+    "15ZxUgn4at3tGFGQFri2d4KtOmH375BN0": {
+      "Cuenta": "04667309",
+      "NumeroFactura": "369014420-6",
+      "kWh": 616.0,
+      "ValorFacturado": 0.0,
+      "InicioPeriodo": "2025-08-28",
+      "FinPeriodo": "2025-09-26"
+    },
+    "1FPiHHFSZ3seV0GHZ-QSv4LkPDj8XpAu2": {
+      "Cuenta": "04667309",
+      "NumeroFactura": "351236809-3",
+      "kWh": 502.0,
+      "ValorFacturado": 0.0,
+      "InicioPeriodo": "2025-03-28",
+      "FinPeriodo": "2025-04-28"
+    },
+    "1tiBtAOY7jrjgK89pbYwUi85JpwlmopSG": {
+      "Cuenta": "04527753",
+      "NumeroFactura": "3614916248",
+      "kWh": 35.0,
+      "ValorFacturado": 24880.0,
+      "InicioPeriodo": "2025-06-28",
+      "FinPeriodo": "2025-07-28"
+    }
+  }
+}

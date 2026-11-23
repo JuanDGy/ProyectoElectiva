@@ -1,0 +1,28 @@
+# 1. Entrar al proyecto
+cd /home/steven/Projects/ProyectoElectiva_0.1
+
+# 2. Preparación
+uv sync --frozen
+uv run python -m scripts.check_setup
+
+# 3. Procesar facturas
+uv run python cli.py procesar --limite 10
+
+# 4. Comparar OCR y Gemini
+uv run python cli.py comparar-ocr --limite 15 --semilla 7
+
+# 5. Entrenar y sincronizar predicciones
+uv run python cli.py sincronizar-bd
+
+# 6. Generar otro mes (opcional)
+uv run python cli.py actualizar-predicciones --anio 2026 --mes 5 --publicar
+
+# 7. Publicar comparativas
+uv run python cli.py comparativas --publicar
+
+# 8. Consultar estado
+uv run python cli.py estado
+
+# 9. Ejecutar pruebas
+uv run python -m pytest -q
+

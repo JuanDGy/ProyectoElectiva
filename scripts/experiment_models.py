@@ -247,7 +247,7 @@ def main(argv=None) -> int:
         op = entry['operational']
         print(f"{entry['approach']:<6} {entry['model']:<7} -> MAE={op['mae']:.2f} WAPE={op['wape']:.2f}% "
               f"n={op['n']} cobertura={op['coverage_pct']:.1f}%")
-    (reports / f'experiment_models_{stamp}.json').write_text(json.dumps(output, indent=2, ensure_ascii=False))
+    (reports / f'experiment_models_{stamp}.json').write_text(json.dumps(output, indent=2, ensure_ascii=False), encoding='utf-8')
     print(f'\nReporte: reports/experiment_models_{stamp}.json')
     return 0
 

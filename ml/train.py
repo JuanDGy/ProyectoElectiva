@@ -156,8 +156,8 @@ def train(model_type='random_forest', data_csv=None, experiment='ecodata-consumo
     excluded.to_csv(candidate_dir / 'excluded_rows.csv', index=False)
     quality.update(gap_policy=setting['gap_policy'], total_observed_test_targets=len(observed_test), scored_test_targets=len(test_df),
                    prediction_coverage_pct=100*len(test_df)/len(observed_test))
-    (candidate_dir / 'quality_report.json').write_text(json.dumps(quality, indent=2, ensure_ascii=False))
-    (candidate_dir / 'validation.json').write_text(json.dumps(validation_results, indent=2, ensure_ascii=False))
+    (candidate_dir / 'quality_report.json').write_text(json.dumps(quality, indent=2, ensure_ascii=False), encoding='utf-8')
+    (candidate_dir / 'validation.json').write_text(json.dumps(validation_results, indent=2, ensure_ascii=False), encoding='utf-8')
     predictions = test_df[['Cuenta', 'Sede', 'periodo', TARGET, 'lag_1_missing', 'history_age']].copy()
     predictions['prediction'] = pred
     predictions['persistence'] = test_ref.lag_1.to_numpy()
@@ -178,7 +178,7 @@ def train(model_type='random_forest', data_csv=None, experiment='ecodata-consumo
     policy_coverage = coverage_report(predictions, extra_test, len(observed_test))
     quality.pop('prediction_coverage_pct', None)
     quality.update(policy_coverage)
-    (candidate_dir / 'quality_report.json').write_text(json.dumps(quality, indent=2, ensure_ascii=False))
+    (candidate_dir / 'quality_report.json').write_text(json.dumps(quality, indent=2, ensure_ascii=False), encoding='utf-8')
     operational = pd.concat([predictions[['Cuenta', TARGET, 'prediction']], extra_test[['Cuenta', TARGET, 'prediction']]] if not extra_test.empty else [predictions[['Cuenta', TARGET, 'prediction']]], ignore_index=True)
     policy_account_metrics = {a: regression_metrics(g[TARGET], g.prediction) for a, g in operational.groupby('Cuenta')}
     code_root = Path(__file__).resolve().parent
@@ -199,7 +199,7 @@ def train(model_type='random_forest', data_csv=None, experiment='ecodata-consumo
              'baseline_per_account': {a: {'mean_consumo': float(g.Consumo.mean()), 'n': len(g)} for a, g in clean[clean.periodo.lt(test_min)].groupby('Cuenta')},
              'prediction_protocol': 'rolling_one_month_prior_actuals',
              'timestamp': datetime.now().isoformat(timespec='seconds')}
-    (candidate_dir / 'metadata.json').write_text(json.dumps(entry, indent=2, ensure_ascii=False))
+    (candidate_dir / 'metadata.json').write_text(json.dumps(entry, indent=2, ensure_ascii=False), encoding='utf-8')
     # Tracking is local and records exact evidence, never invokes authentication or network services.
     import mlflow
     mlflow.set_tracking_uri('sqlite:///' + str(Path('mlruns/v1_tracking.db').resolve()))
@@ -213,7 +213,7 @@ def train(model_type='random_forest', data_csv=None, experiment='ecodata-consumo
         for name in ['metadata.json', 'validation.json', 'quality_report.json', 'test_predictions.csv', 'model.joblib']:
             mlflow.log_artifact(str(candidate_dir / name))
         entry['mlflow_run_id'] = run.info.run_id
-    (candidate_dir / 'metadata.json').write_text(json.dumps(entry, indent=2, ensure_ascii=False))
+    (candidate_dir / 'metadata.json').write_text(json.dumps(entry, indent=2, ensure_ascii=False), encoding='utf-8')
     add_challenger(entry)
     print(f'{model_type}: CV MAE={best["metrics"]["mae"]:.3f}; test={metrics}; elegible={eligible}; modelo={model_path}')
     return entry
@@ -229,7 +229,7 @@ def train_models(data_csv=None, **kwargs):
                   'source_sha256': selected['data_sha256'], 'auto_promoted': False}
     Path('reports').mkdir(exist_ok=True)
     output = Path('reports') / f'comparison_{datetime.now().strftime("%Y%m%d_%H%M%S")}.json'
-    output.write_text(json.dumps(comparison, indent=2, ensure_ascii=False))
+    output.write_text(json.dumps(comparison, indent=2, ensure_ascii=False), encoding='utf-8')
     print(f'Comparación: {output}; seleccionado por CV: {selected["id"]}')
     return comparison
 
